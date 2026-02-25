@@ -6,6 +6,7 @@ import (
 	"github.com/ayussh-2/timepad/config"
 	"github.com/ayussh-2/timepad/internal/database"
 	"github.com/ayussh-2/timepad/internal/routes"
+	"github.com/ayussh-2/timepad/internal/utils"
 )
 
 func main() {
@@ -16,7 +17,12 @@ func main() {
 
 	db := database.Connect(cfg.DatabaseURL)
 
-	router := routes.SetupRouter(cfg, db)
+	jwtUtil, err := utils.NewJWTUtil(cfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize JWT utility: %v", err)
+	}
+
+	router := routes.SetupRouter(cfg, db, jwtUtil)
 	if err := router.Run(cfg.ServerAddr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

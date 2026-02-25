@@ -5,11 +5,12 @@ import (
 	"github.com/ayussh-2/timepad/internal/controllers"
 	"github.com/ayussh-2/timepad/internal/middleware"
 	"github.com/ayussh-2/timepad/internal/services"
+	"github.com/ayussh-2/timepad/internal/utils"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-func SetupRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
+func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil) *gin.Engine {
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -20,13 +21,17 @@ func SetupRouter(cfg *config.Config, db *gorm.DB) *gin.Engine {
 
 	// Initialize services
 	healthService := services.NewHealthService()
+	authService := services.NewAuthService(db, jwtUtil)
 
 	// Initialize controllers
 	healthController := controllers.NewHealthController(healthService)
+	authController := controllers.NewAuthController(authService)
 
 	v1 := r.Group("/api/v1")
+	users := v1.Group("/users")
 
 	RegisterHealthRoutes(r, v1, healthController)
+	RegisterAuthRoutes(r, users, authController)
 
 	return r
 }
