@@ -65,7 +65,7 @@ Bright or saturated colors must be avoided.
 
 ### Font Pairing
 
-Primary UI Font: **Source Sans 3**\
+Primary UI Font: **Geist**\
 Decorative / Handwritten Font: **KG Teacher**
 
 #### Usage Rules
@@ -77,7 +77,7 @@ KG Teacher is used sparingly for:
 - Empty states
 - Friendly highlights
 
-Source Sans 3 is used for:
+Geist is used for:
 
 - Body text
 - Controls

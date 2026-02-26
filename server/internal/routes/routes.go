@@ -22,16 +22,41 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil) *gin.E
 	// Initialize services
 	healthService := services.NewHealthService()
 	authService := services.NewAuthService(db, jwtUtil)
+	eventsService := services.NewEventsService(db)
+	summaryService := services.NewSummaryService(db)
+	reportsService := services.NewReportsService(db)
+	categoriesService := services.NewCategoriesService(db)
+	devicesService := services.NewDevicesService(db)
+	settingsService := services.NewSettingsService(db)
 
 	// Initialize controllers
 	healthController := controllers.NewHealthController(healthService)
 	authController := controllers.NewAuthController(authService)
+	eventsController := controllers.NewEventsController(eventsService)
+	summaryController := controllers.NewSummaryController(summaryService)
+	reportsController := controllers.NewReportsController(reportsService)
+	categoriesController := controllers.NewCategoriesController(categoriesService)
+	devicesController := controllers.NewDevicesController(devicesService)
+	settingsController := controllers.NewSettingsController(settingsService)
 
 	v1 := r.Group("/api/v1")
-	auth := v1.Group("/auth")
 
-	RegisterHealthRoutes(r, v1, healthController)
+	// Public routes
+	auth := v1.Group("/auth")
 	RegisterAuthRoutes(r, auth, authController, jwtUtil)
+	RegisterHealthRoutes(r, v1, healthController)
+
+	// Protected routes
+	protected := v1.Group("/")
+	protected.Use(middleware.Auth(jwtUtil))
+	{
+		RegisterEventsRoutes(protected, eventsController)
+		RegisterSummaryRoutes(protected, summaryController)
+		RegisterReportsRoutes(protected, reportsController)
+		RegisterCategoriesRoutes(protected, categoriesController)
+		RegisterDevicesRoutes(protected, devicesController)
+		RegisterSettingsRoutes(protected, settingsController)
+	}
 
 	return r
 }

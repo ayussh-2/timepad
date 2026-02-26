@@ -1,6 +1,6 @@
 # Cross-Device Time Tracker — Technical Documentation
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Last Updated:** February 2026  
 **Status:** Draft
 
@@ -12,7 +12,7 @@
 2. [Technology Stack](#2-technology-stack)
 3. [Repository Structure](#3-repository-structure)
 4. [Central Go Server](#4-central-go-server)
-5. [Web App (Vue 3)](#5-web-app-vue-3)
+5. [Web App (React)](#5-web-app-react)
 6. [Client Collectors](#6-client-collectors)
 7. [Database Design](#7-database-design)
 8. [API Reference](#8-api-reference)
@@ -31,47 +31,9 @@ The application is divided into two distinct layers:
 
 **Collector Layer** — Thin, platform-native components that run in the background, detect user activity, and ship raw events to the central server. Each platform has its own native implementation.
 
-**Presentation Layer** — A single Vue 3 web application that handles all UI: dashboards, timelines, reports, and settings. It is served as a standalone web app and also embedded via WebView inside the Android and Windows native wrappers.
+**Presentation Layer** — A single React web application that handles all UI: dashboards, timelines, reports, and settings. It is served as a standalone web app and also embedded via WebView inside the Android and Windows native wrappers.
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                      USER DEVICES                       │
-│                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │   Android    │  │   Windows    │  │   Browser    │  │
-│  │  Native App  │  │  Tray App    │  │  Extension   │  │
-│  │  (Kotlin)    │  │    (Go)      │  │    (JS)      │  │
-│  │              │  │              │  │              │  │
-│  │  WebView ──► │  │  WebView ──► │  │  Opens Web ► │  │
-│  │  Vue App     │  │  Vue App     │  │  App in Tab  │  │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  │
-│         │                 │                 │           │
-└─────────┼─────────────────┼─────────────────┼───────────┘
-          │   Activity      │   Events        │
-          │   POST /events  │                 │
-          ▼                 ▼                 ▼
-┌─────────────────────────────────────────────────────────┐
-│                  CENTRAL GO SERVER                      │
-│                                                         │
-│   ┌──────────┐  ┌──────────┐  ┌──────────────────────┐ │
-│   │   API    │  │ Business │  │   Background Jobs    │ │
-│   │  Router  │  │  Logic   │  │  (Categorizer, Sync, │ │
-│   │  (Gin)   │  │  Layer   │  │   Aggregator)        │ │
-│   └──────────┘  └──────────┘  └──────────────────────┘ │
-│                                                         │
-│   ┌──────────────────────┐   ┌──────────────────────┐  │
-│   │     PostgreSQL       │   │       Redis          │  │
-│   │  (Primary Storage)   │   │  (Cache & Sessions)  │  │
-│   └──────────────────────┘   └──────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-          ▲
-          │  REST API (JSON)
-          ▼
-┌─────────────────────────────────────────────────────────┐
-│                  VUE 3 WEB APP                          │
-│          (Served standalone + embedded in WebView)      │
-└─────────────────────────────────────────────────────────┘
-```
+The architecture is a classic hub-and-spoke model. Each collector independently sends data directly to the central Go server using a REST API over HTTPS. The server is the single source of truth — all storage, aggregation, and categorization happen there. The React web app reads from the same API and presents unified views across all devices.
 
 ---
 
@@ -79,31 +41,28 @@ The application is divided into two distinct layers:
 
 ### Central Server
 
-| Component        | Choice            | Reason                                    |
-| ---------------- | ----------------- | ----------------------------------------- |
-| Language         | Go 1.22+          | Performant, low memory, great concurrency |
-| HTTP Framework   | Gin               | Fast routing, middleware support          |
-| ORM              | GORM              | Clean Go ORM, good migration support      |
-| Database         | PostgreSQL 16     | Reliable, JSONB support, strong typing    |
-| Cache / Sessions | Redis 7           | Fast session store, pub/sub for sync      |
-| Auth             | JWT (RS256)       | Stateless, works across devices           |
-| Task Queue       | Asynq             | Go-native, Redis-backed background jobs   |
-| WebSocket        | Gorilla WebSocket | Real-time sync push                       |
+| Component      | Choice        | Reason                                    |
+| -------------- | ------------- | ----------------------------------------- |
+| Language       | Go 1.24+      | Performant, low memory, great concurrency |
+| HTTP Framework | Gin           | Fast routing, middleware support          |
+| ORM            | GORM          | Clean Go ORM, good migration support      |
+| Database       | PostgreSQL 16 | Reliable, JSONB support, strong typing    |
+| Auth           | JWT (RS256)   | Stateless, works across devices           |
 
 ### Web App (Dashboard UI)
 
-| Component            | Choice                 | Reason                                   |
-| -------------------- | ---------------------- | ---------------------------------------- |
-| Framework            | Vue 3                  | Composition API, reactive, lightweight   |
-| Build Tool           | Vite                   | Fast HMR, excellent Vue support          |
-| State Management     | Pinia                  | Official Vue store, simple and typed     |
-| Routing              | Vue Router 4           | Official, well-integrated                |
-| HTTP Client          | Axios                  | Interceptors, easy auth header injection |
-| Charts               | Chart.js + vue-chartjs | Flexible, well-documented                |
-| UI Component Library | shadcn-vue             | Accessible, unstyled, customizable       |
-| CSS                  | Tailwind CSS           | Utility-first, easy to customize         |
-| Date Handling        | Day.js                 | Lightweight Moment.js alternative        |
-| TypeScript           | Yes                    | Type safety across the entire app        |
+| Component            | Choice          | Reason                                       |
+| -------------------- | --------------- | -------------------------------------------- |
+| Framework            | React 19        | Component model, hooks, wide ecosystem       |
+| Build Tool           | Vite            | Fast HMR, excellent React support            |
+| State Management     | Zustand         | Lightweight, hook-based, minimal boilerplate |
+| Routing              | React Router v6 | Industry standard, file-based routing        |
+| HTTP Client          | Axios           | Interceptors, easy auth header injection     |
+| Charts               | Recharts        | React-native chart library, composable       |
+| UI Component Library | shadcn/ui       | Accessible, unstyled, customizable           |
+| CSS                  | Tailwind CSS    | Utility-first, easy to customize             |
+| Date Handling        | Day.js          | Lightweight Moment.js alternative            |
+| TypeScript           | Yes             | Type safety across the entire app            |
 
 ### Android Collector
 
@@ -140,102 +99,15 @@ The application is divided into two distinct layers:
 
 ## 3. Repository Structure
 
-```
-time-tracker/
-├── server/                         # Central Go server
-│   ├── cmd/
-│   │   └── server/
-│   │       └── main.go
-│   ├── internal/
-│   │   ├── api/
-│   │   │   ├── handlers/           # Route handlers
-│   │   │   ├── middleware/         # Auth, logging, rate-limit
-│   │   │   └── router.go
-│   │   ├── models/                 # GORM models
-│   │   ├── services/               # Business logic
-│   │   ├── jobs/                   # Asynq background tasks
-│   │   └── sync/                   # WebSocket sync hub
-│   ├── migrations/                 # SQL migration files
-│   ├── config/
-│   │   └── config.go
-│   ├── go.mod
-│   └── go.sum
-│
-├── webapp/                         # Vue 3 dashboard
-│   ├── src/
-│   │   ├── assets/
-│   │   ├── components/
-│   │   │   ├── timeline/
-│   │   │   ├── charts/
-│   │   │   └── ui/
-│   │   ├── views/
-│   │   │   ├── DashboardView.vue
-│   │   │   ├── TimelineView.vue
-│   │   │   ├── ReportsView.vue
-│   │   │   └── SettingsView.vue
-│   │   ├── stores/                 # Pinia stores
-│   │   │   ├── auth.ts
-│   │   │   ├── activity.ts
-│   │   │   └── settings.ts
-│   │   ├── api/                    # Axios client + typed API calls
-│   │   │   ├── client.ts
-│   │   │   ├── activity.ts
-│   │   │   └── auth.ts
-│   │   ├── types/                  # Global TypeScript types
-│   │   ├── composables/            # Reusable Vue composables
-│   │   ├── router/
-│   │   │   └── index.ts
-│   │   ├── App.vue
-│   │   └── main.ts
-│   ├── public/
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tailwind.config.ts
-│   ├── tsconfig.json
-│   └── package.json
-│
-├── clients/
-│   ├── android/                    # Kotlin Android app
-│   │   ├── app/
-│   │   │   └── src/main/
-│   │   │       ├── java/com/timetracker/
-│   │   │       │   ├── services/
-│   │   │       │   │   ├── ActivityCollectorService.kt
-│   │   │       │   │   └── SyncService.kt
-│   │   │       │   ├── webview/
-│   │   │       │   │   └── MainActivity.kt
-│   │   │       │   └── api/
-│   │   │       └── AndroidManifest.xml
-│   │   └── build.gradle
-│   │
-│   ├── windows/                    # Go Windows tray app
-│   │   ├── cmd/
-│   │   │   └── main.go
-│   │   ├── collector/
-│   │   │   └── windows_collector.go
-│   │   ├── tray/
-│   │   │   └── tray.go
-│   │   ├── webview/
-│   │   │   └── webview.go
-│   │   ├── go.mod
-│   │   └── go.sum
-│   │
-│   └── extension/                  # Browser extension
-│       ├── src/
-│       │   ├── background/
-│       │   │   └── service-worker.ts
-│       │   ├── content/
-│       │   │   └── tracker.ts
-│       │   └── popup/
-│       │       └── Popup.vue
-│       ├── manifest.json
-│       ├── vite.config.ts
-│       └── package.json
-│
-└── docker/
-    ├── docker-compose.yml
-    └── docker-compose.prod.yml
-```
+The monorepo is organized into two top-level areas: `server/` for the Go backend and `ui/` (planned) for all frontend and client code.
+
+**Server (`server/`)** — ✅ Exists. Contains the main Go application entry point under `cmd/`, with all business logic organized inside `internal/` using the following sub-packages: `controllers/` for HTTP handlers, `services/` for business logic, `models/` for GORM models, `routes/` for route registration, `middleware/` for auth and CORS, and `utils/` for shared helpers. Migrations live in the `cmd/migrate` directory. A `cmd/seed` directory also exists.
+
+**UI Core (`ui/core/`)** — 🔴 Not yet created. Will be the React 19 web application — the single, shared dashboard UI. Planned as a standard Vite + React project with key directories: `components/`, `pages/`, `store/` (Zustand), `api/` (Axios wrappers), `types/`, and `hooks/`.
+
+**UI Wrappers (`ui/wrappers/`)** — 🔴 Not yet created. Will contain the platform-specific native shells that embed the `ui/core` React app inside a WebView and provide a background activity collector. Planned sub-directories: `android/` (Kotlin), `windows/` (Go tray app), `extension/` (browser extension).
+
+**Infrastructure (`docker/`)** — 🔴 Not yet created. Will contain Docker Compose files for local dev and production.
 
 ---
 
@@ -243,797 +115,143 @@ time-tracker/
 
 ### 4.1 Server Entry Point
 
-```go
-// server/cmd/server/main.go
-package main
-
-import (
-    "log"
-    "time-tracker/internal/api"
-    "time-tracker/internal/config"
-    "time-tracker/internal/jobs"
-    "time-tracker/internal/sync"
-)
-
-func main() {
-    cfg := config.Load()
-
-    db := config.ConnectDB(cfg)
-    redis := config.ConnectRedis(cfg)
-
-    syncHub := sync.NewHub(redis)
-    go syncHub.Run()
-
-    jobServer := jobs.NewServer(redis)
-    go jobServer.Run()
-
-    router := api.NewRouter(cfg, db, redis, syncHub)
-    log.Fatal(router.Run(cfg.ServerAddr))
-}
-```
+The main entry point in `cmd/server/main.go` loads configuration, establishes the database connection, constructs the Gin router via `routes.SetupRouter`, and starts listening. The server uses `air` for hot-reload in development.
 
 ### 4.2 Router Setup
 
-```go
-// server/internal/api/router.go
-func NewRouter(cfg *config.Config, db *gorm.DB, rdb *redis.Client, hub *sync.Hub) *gin.Engine {
-    r := gin.New()
-    r.Use(gin.Logger(), gin.Recovery())
-    r.Use(middleware.CORS())
-    r.Use(middleware.RateLimit(rdb))
+All routes are registered in `routes/routes.go`. Routes are split into two groups:
 
-    v1 := r.Group("/api/v1")
-    {
-        // Public routes
-        auth := v1.Group("/auth")
-        auth.POST("/register", handlers.Register(db))
-        auth.POST("/login", handlers.Login(db, cfg))
-        auth.POST("/refresh", handlers.Refresh(cfg))
+- **Public routes** (`/api/v1/auth/*`, `/api/v1/health`): No authentication required.
+- **Protected routes** (all others): Guarded by the JWT `middleware.Auth` middleware which validates the bearer token on every request and injects the `userID` string into the Gin context.
 
-        // Protected routes
-        protected := v1.Group("/")
-        protected.Use(middleware.Auth(cfg))
-        {
-            protected.POST("/events", handlers.IngestEvents(db, hub))
-            protected.GET("/events", handlers.GetEvents(db))
-            protected.GET("/timeline", handlers.GetTimeline(db))
-            protected.GET("/summary/daily", handlers.GetDailySummary(db))
-            protected.GET("/summary/weekly", handlers.GetWeeklySummary(db))
-            protected.GET("/reports", handlers.GetReports(db))
-            protected.GET("/categories", handlers.GetCategories(db))
-            protected.PATCH("/events/:id", handlers.EditEvent(db))
-            protected.DELETE("/events/:id", handlers.DeleteEvent(db))
-            protected.GET("/ws", handlers.WebSocketHandler(hub))
-            protected.GET("/devices", handlers.GetDevices(db))
-            protected.GET("/settings", handlers.GetSettings(db))
-            protected.PUT("/settings", handlers.UpdateSettings(db))
-        }
-    }
+Currently registered protected endpoints:
 
-    return r
-}
-```
+| Method | Path              | Handler            |
+| ------ | ----------------- | ------------------ |
+| POST   | `/events`         | `IngestEvents`     |
+| GET    | `/events`         | `GetEvents`        |
+| PATCH  | `/events/:id`     | `EditEvent`        |
+| DELETE | `/events/:id`     | `DeleteEvent`      |
+| GET    | `/timeline`       | `GetTimeline`      |
+| GET    | `/summary/daily`  | `GetDailySummary`  |
+| GET    | `/summary/weekly` | `GetWeeklySummary` |
+| GET    | `/reports`        | `GetReports`       |
+| GET    | `/categories`     | `GetCategories`    |
+| PATCH  | `/categories/:id` | `UpdateCategory`   |
+| GET    | `/devices`        | `GetDevices`       |
+| GET    | `/settings`       | `GetSettings`      |
+| PUT    | `/settings`       | `UpdateSettings`   |
 
 ### 4.3 Models
 
-```go
-// server/internal/models/activity_event.go
-type ActivityEvent struct {
-    ID           uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-    UserID       uuid.UUID  `gorm:"type:uuid;not null;index"`
-    DeviceID     uuid.UUID  `gorm:"type:uuid;not null;index"`
-    AppName      string     `gorm:"not null"`
-    WindowTitle  string
-    URL          string
-    CategoryID   *uuid.UUID `gorm:"type:uuid"`
-    StartTime    time.Time  `gorm:"not null;index"`
-    EndTime      time.Time  `gorm:"not null"`
-    DurationSecs int        `gorm:"not null"`
-    IsIdle       bool       `gorm:"default:false"`
-    IsPrivate    bool       `gorm:"default:false"`
-    RawMeta      datatypes.JSON
-    CreatedAt    time.Time
-}
+All models live in `internal/models/models.go` and are managed by GORM AutoMigrate on startup. See **Section 7** for the full schema.
 
-// server/internal/models/device.go
-type Device struct {
-    ID         uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-    UserID     uuid.UUID `gorm:"type:uuid;not null;index"`
-    Name       string    `gorm:"not null"`
-    Platform   string    `gorm:"not null"` // "android" | "windows" | "browser"
-    DeviceKey  string    `gorm:"uniqueIndex;not null"`
-    LastSeenAt time.Time
-    CreatedAt  time.Time
-}
+### 4.4 Event Ingestion
 
-// server/internal/models/category.go
-type Category struct {
-    ID       uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-    UserID   *uuid.UUID
-    Name     string `gorm:"not null"`
-    Color    string
-    Icon     string
-    IsSystem bool `gorm:"default:false"`
-    Rules    datatypes.JSON // matching rules: app name, URL pattern, etc.
-}
-```
+`EventsService.IngestEvents` validates the `DeviceKey` against the calling user's devices, filters out events with zero or negative duration, and bulk-inserts valid events using `db.CreateInBatches(events, 100)`.
 
-### 4.4 Event Ingestion Handler
+### 4.5 Background Jobs
 
-```go
-// server/internal/api/handlers/events.go
-type IngestPayload struct {
-    DeviceKey string          `json:"device_key" binding:"required"`
-    Events    []EventInput    `json:"events" binding:"required,min=1"`
-}
+There are currently no scheduled background jobs running. The following are identified as future work:
 
-type EventInput struct {
-    AppName     string    `json:"app_name" binding:"required"`
-    WindowTitle string    `json:"window_title"`
-    URL         string    `json:"url"`
-    StartTime   time.Time `json:"start_time" binding:"required"`
-    EndTime     time.Time `json:"end_time" binding:"required"`
-    IsIdle      bool      `json:"is_idle"`
-}
-
-func IngestEvents(db *gorm.DB, hub *sync.Hub) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        var payload IngestPayload
-        if err := c.ShouldBindJSON(&payload); err != nil {
-            c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-            return
-        }
-
-        userID := middleware.GetUserID(c)
-
-        // Resolve device
-        var device models.Device
-        result := db.Where("device_key = ? AND user_id = ?", payload.DeviceKey, userID).
-            First(&device)
-        if result.Error != nil {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "unknown device"})
-            return
-        }
-
-        // Batch insert events
-        events := make([]models.ActivityEvent, 0, len(payload.Events))
-        for _, e := range payload.Events {
-            duration := int(e.EndTime.Sub(e.StartTime).Seconds())
-            if duration <= 0 {
-                continue
-            }
-            events = append(events, models.ActivityEvent{
-                UserID:       userID,
-                DeviceID:     device.ID,
-                AppName:      e.AppName,
-                WindowTitle:  e.WindowTitle,
-                URL:          e.URL,
-                StartTime:    e.StartTime,
-                EndTime:      e.EndTime,
-                DurationSecs: duration,
-                IsIdle:       e.IsIdle,
-            })
-        }
-
-        if err := db.CreateInBatches(events, 100).Error; err != nil {
-            c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save events"})
-            return
-        }
-
-        // Notify WebSocket clients of new data
-        hub.BroadcastToUser(userID, sync.Message{Type: "events_updated"})
-
-        // Queue categorization job
-        // jobs.EnqueueCategorize(userID)
-
-        c.JSON(http.StatusCreated, gin.H{"inserted": len(events)})
-    }
-}
-```
-
-### 4.5 Background Jobs (Asynq)
-
-```go
-// server/internal/jobs/categorizer.go
-const TaskCategorize = "task:categorize"
-
-func HandleCategorize(db *gorm.DB) asynq.HandlerFunc {
-    return func(ctx context.Context, t *asynq.Task) error {
-        var payload struct{ UserID string }
-        json.Unmarshal(t.Payload(), &payload)
-
-        // Fetch uncategorized events
-        var events []models.ActivityEvent
-        db.Where("user_id = ? AND category_id IS NULL", payload.UserID).
-            Order("start_time desc").
-            Limit(500).
-            Find(&events)
-
-        // Load user + system category rules
-        var categories []models.Category
-        db.Where("user_id = ? OR is_system = true", payload.UserID).Find(&categories)
-
-        for i, e := range events {
-            for _, cat := range categories {
-                if matchesCategory(e, cat) {
-                    events[i].CategoryID = &cat.ID
-                    break
-                }
-            }
-        }
-
-        // Batch update
-        for _, e := range events {
-            if e.CategoryID != nil {
-                db.Model(&e).Update("category_id", e.CategoryID)
-            }
-        }
-
-        return nil
-    }
-}
-```
+- **Auto-categorization job** — scan events with `category_id IS NULL` and apply user-defined category rules.
+- **Data retention purge** — delete events older than the user's `data_retention_days` setting.
 
 ---
 
-## 5. Web App (Vue 3)
+## 5. Web App (React) — 🔴 Planned
 
-### 5.1 Vite Config
+> **Note:** The React web app has not been built yet. This section describes the planned architecture.
 
-```typescript
-// webapp/vite.config.ts
-import { defineConfig } from "vite";
-import vue from "@vitejs/plugin-vue";
-import path from "path";
+### 5.1 Project Setup
 
-export default defineConfig({
-    plugins: [vue()],
-    resolve: {
-        alias: {
-            "@": path.resolve(__dirname, "./src"),
-        },
-    },
-    server: {
-        port: 5173,
-        proxy: {
-            "/api": {
-                target: "http://localhost:8080",
-                changeOrigin: true,
-            },
-            "/ws": {
-                target: "ws://localhost:8080",
-                ws: true,
-            },
-        },
-    },
-});
-```
+The frontend will be a Vite-powered React 19 application written in TypeScript, living in `ui/core/`. It will proxy `/api` requests to the Go server at `localhost:8080` during development.
 
-### 5.2 Axios API Client
+### 5.2 API Client
 
-```typescript
-// webapp/src/api/client.ts
-import axios from "axios";
-import { useAuthStore } from "@/stores/auth";
-import router from "@/router";
+A shared Axios instance is created with the API base URL pre-configured. Request interceptors attach the JWT bearer token from the auth store on every outgoing request. Response interceptors handle 401 errors by attempting a token refresh via the `/auth/refresh` endpoint; on failure, the user is logged out and redirected to the login page.
 
-const apiClient = axios.create({
-    baseURL: "/api/v1",
-    timeout: 10000,
-});
+### 5.3 State Management (Zustand)
 
-// Attach JWT to every request
-apiClient.interceptors.request.use((config) => {
-    const auth = useAuthStore();
-    if (auth.token) {
-        config.headers.Authorization = `Bearer ${auth.token}`;
-    }
-    return config;
-});
+Three main stores:
 
-// Handle token expiry
-apiClient.interceptors.response.use(
-    (res) => res,
-    async (err) => {
-        if (err.response?.status === 401) {
-            const auth = useAuthStore();
-            const refreshed = await auth.refreshToken();
-            if (refreshed) {
-                return apiClient(err.config);
-            }
-            auth.logout();
-            router.push("/login");
-        }
-        return Promise.reject(err);
-    },
-);
+- **Auth store** — holds access and refresh tokens, the current user object, and exposes `login`, `logout`, and `refreshToken` actions. Tokens are persisted to `localStorage`.
+- **Activity store** — holds the current `timeline` array, `dailySummary`, `weeklySummary`, `selectedDate`, and `isLoading` state. Exposes fetch actions that call the Axios API wrappers.
+- **Settings store** — holds user settings and exposes a `updateSettings` action.
 
-export default apiClient;
-```
+### 5.4 Data Freshness Strategy
 
-### 5.3 Pinia Auth Store
+WebSocket support is deferred. In the interim, the web app uses two mechanisms to keep data fresh:
 
-```typescript
-// webapp/src/stores/auth.ts
-import { defineStore } from "pinia";
-import { ref, computed } from "vue";
-import apiClient from "@/api/client";
+1. **Auto-refresh every 30 minutes** — A `useEffect` hook in the main layout sets up a `setInterval` that re-calls the active summary and timeline fetch actions.
+2. **Manual refresh button** — A refresh icon button in the dashboard header dispatches the same fetch actions on click.
 
-export const useAuthStore = defineStore("auth", () => {
-    const token = ref<string | null>(localStorage.getItem("token"));
-    const refreshToken = ref<string | null>(
-        localStorage.getItem("refresh_token"),
-    );
-    const user = ref<User | null>(null);
+### 5.5 Routing
 
-    const isAuthenticated = computed(() => !!token.value);
+Routes are defined using React Router v6. All routes except `/login` and `/register` are wrapped in a `PrivateRoute` component that checks the auth store and redirects unauthenticated users to `/login`.
 
-    async function login(email: string, password: string) {
-        const { data } = await apiClient.post("/auth/login", {
-            email,
-            password,
-        });
-        token.value = data.access_token;
-        refreshToken.value = data.refresh_token;
-        user.value = data.user;
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("refresh_token", data.refresh_token);
-    }
+| Path         | Page Component          |
+| ------------ | ----------------------- |
+| `/login`     | `LoginPage`             |
+| `/register`  | `RegisterPage`          |
+| `/`          | Redirect → `/dashboard` |
+| `/dashboard` | `DashboardPage`         |
+| `/timeline`  | `TimelinePage`          |
+| `/reports`   | `ReportsPage`           |
+| `/settings`  | `SettingsPage`          |
 
-    async function refresh() {
-        try {
-            const { data } = await apiClient.post("/auth/refresh", {
-                refresh_token: refreshToken.value,
-            });
-            token.value = data.access_token;
-            localStorage.setItem("token", data.access_token);
-            return true;
-        } catch {
-            return false;
-        }
-    }
+### 5.6 Key TypeScript Types
 
-    function logout() {
-        token.value = null;
-        refreshToken.value = null;
-        user.value = null;
-        localStorage.removeItem("token");
-        localStorage.removeItem("refresh_token");
-    }
+The `src/types/index.ts` file defines all shared interfaces: `TimelineEntry`, `DailySummary`, `WeeklySummary`, `ReportData`, `Category`, `Device`, `AppUsage`, `DeviceUsage`, and `UserSettings`. These mirror the JSON shapes returned by the Go API.
 
-    return { token, user, isAuthenticated, login, refresh, logout };
-});
-```
+**Notable fields on `DailySummary`:**
 
-### 5.4 Pinia Activity Store
-
-```typescript
-// webapp/src/stores/activity.ts
-import { defineStore } from "pinia";
-import { ref } from "vue";
-import { getTimeline, getDailySummary } from "@/api/activity";
-import type { TimelineEntry, DailySummary } from "@/types";
-
-export const useActivityStore = defineStore("activity", () => {
-    const timeline = ref<TimelineEntry[]>([]);
-    const summary = ref<DailySummary | null>(null);
-    const loading = ref(false);
-    const selectedDate = ref(new Date());
-
-    async function fetchTimeline(date: Date) {
-        loading.value = true;
-        try {
-            const { data } = await getTimeline(date);
-            timeline.value = data;
-        } finally {
-            loading.value = false;
-        }
-    }
-
-    async function fetchSummary(date: Date) {
-        const { data } = await getDailySummary(date);
-        summary.value = data;
-    }
-
-    return {
-        timeline,
-        summary,
-        loading,
-        selectedDate,
-        fetchTimeline,
-        fetchSummary,
-    };
-});
-```
-
-### 5.5 WebSocket Composable
-
-```typescript
-// webapp/src/composables/useRealtimeSync.ts
-import { onMounted, onUnmounted } from "vue";
-import { useAuthStore } from "@/stores/auth";
-import { useActivityStore } from "@/stores/activity";
-
-export function useRealtimeSync() {
-    let ws: WebSocket | null = null;
-    const auth = useAuthStore();
-    const activity = useActivityStore();
-
-    function connect() {
-        const protocol = location.protocol === "https:" ? "wss" : "ws";
-        ws = new WebSocket(
-            `${protocol}://${location.host}/api/v1/ws?token=${auth.token}`,
-        );
-
-        ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
-            if (msg.type === "events_updated") {
-                activity.fetchTimeline(activity.selectedDate);
-                activity.fetchSummary(activity.selectedDate);
-            }
-        };
-
-        ws.onclose = () => {
-            // Reconnect after 3s
-            setTimeout(connect, 3000);
-        };
-    }
-
-    onMounted(connect);
-    onUnmounted(() => ws?.close());
-}
-```
-
-### 5.6 Router
-
-```typescript
-// webapp/src/router/index.ts
-import { createRouter, createWebHistory } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
-
-const routes = [
-    {
-        path: "/login",
-        component: () => import("@/views/LoginView.vue"),
-        meta: { public: true },
-    },
-    { path: "/", redirect: "/dashboard" },
-    {
-        path: "/dashboard",
-        component: () => import("@/views/DashboardView.vue"),
-    },
-    { path: "/timeline", component: () => import("@/views/TimelineView.vue") },
-    { path: "/reports", component: () => import("@/views/ReportsView.vue") },
-    { path: "/settings", component: () => import("@/views/SettingsView.vue") },
-];
-
-const router = createRouter({
-    history: createWebHistory(),
-    routes,
-});
-
-router.beforeEach((to) => {
-    const auth = useAuthStore();
-    if (!to.meta.public && !auth.isAuthenticated) {
-        return "/login";
-    }
-});
-
-export default router;
-```
-
-### 5.7 Key TypeScript Types
-
-```typescript
-// webapp/src/types/index.ts
-export interface TimelineEntry {
-    id: string;
-    appName: string;
-    windowTitle: string;
-    url: string;
-    category: Category;
-    device: Device;
-    startTime: string; // ISO 8601
-    endTime: string;
-    durationSecs: number;
-    isIdle: boolean;
-}
-
-export interface DailySummary {
-    date: string;
-    totalActiveSecs: number;
-    totalIdleSecs: number;
-    productiveSecs: number;
-    distractionSecs: number;
-    topApps: AppUsage[];
-    peakHour: number;
-    deviceBreakdown: DeviceUsage[];
-}
-
-export interface Category {
-    id: string;
-    name: string;
-    color: string;
-    icon: string;
-}
-
-export interface Device {
-    id: string;
-    name: string;
-    platform: "android" | "windows" | "browser";
-}
-
-export interface AppUsage {
-    appName: string;
-    category: Category;
-    totalSecs: number;
-}
-```
+| Field               | Type            | Description                                      |
+| ------------------- | --------------- | ------------------------------------------------ |
+| `total_active_secs` | `number`        | Total non-idle time                              |
+| `total_idle_secs`   | `number`        | Total idle time                                  |
+| `productive_secs`   | `number`        | Time in categories marked `is_productive: true`  |
+| `distraction_secs`  | `number`        | Time in categories marked `is_productive: false` |
+| `peak_hour`         | `number`        | Hour of day (0-23) with highest activity         |
+| `top_apps`          | `AppUsage[]`    | Per-app breakdown with category                  |
+| `device_breakdown`  | `DeviceUsage[]` | Per-device breakdown                             |
 
 ---
 
-## 6. Client Collectors
+## 6. Client Collectors — 🔴 Planned
+
+> **Note:** None of the client collectors have been built yet. This section describes the planned architecture for each platform.
 
 ### 6.1 Android Collector (Kotlin)
 
-The Android collector runs as a persistent Foreground Service to survive background restrictions. It uses `UsageStatsManager` to query app usage in polling intervals.
-
-```kotlin
-// clients/android/app/src/main/java/com/timetracker/services/ActivityCollectorService.kt
-class ActivityCollectorService : Service() {
-
-    private val pollingIntervalMs = 30_000L  // 30 seconds
-    private val handler = Handler(Looper.getMainLooper())
-    private val apiClient = RetrofitClient.create()
-
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIF_ID, buildNotification())
-        schedulePolling()
-        return START_STICKY
-    }
-
-    private fun schedulePolling() {
-        handler.postDelayed({
-            collectAndSend()
-            schedulePolling()
-        }, pollingIntervalMs)
-    }
-
-    private fun collectAndSend() {
-        val usm = getSystemService(USAGE_STATS_SERVICE) as UsageStatsManager
-        val now = System.currentTimeMillis()
-        val since = now - pollingIntervalMs
-
-        val stats = usm.queryUsageStats(
-            UsageStatsManager.INTERVAL_BEST, since, now
-        )
-
-        val events = stats
-            .filter { it.totalTimeInForeground > 0 }
-            .map { stat ->
-                EventInput(
-                    appName = getAppLabel(stat.packageName),
-                    startTime = Instant.ofEpochMilli(stat.lastTimeUsed - stat.totalTimeInForeground),
-                    endTime = Instant.ofEpochMilli(stat.lastTimeUsed),
-                    isIdle = false,
-                )
-            }
-
-        if (events.isNotEmpty()) {
-            apiClient.ingestEvents(IngestPayload(
-                deviceKey = DeviceRegistry.getKey(this),
-                events = events
-            )).enqueue(/* handle errors */)
-        }
-    }
-}
-```
+The Android collector runs as a persistent Foreground Service to survive background restrictions. It uses `UsageStatsManager` to query app usage in 30-second polling intervals. On each poll, it maps usage stats into `EventInput` objects and POSTs them to the server.
 
 **Required Android Manifest Permissions:**
 
-```xml
-<uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
-    tools:ignore="ProtectedPermissions"/>
-<uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-<uses-permission android:name="android.permission.INTERNET"/>
-```
+- `android.permission.PACKAGE_USAGE_STATS` — to read app usage stats
+- `android.permission.FOREGROUND_SERVICE` — to run persistently
+- `android.permission.POST_NOTIFICATIONS` — for the persistent notification
+- `android.permission.INTERNET` — for API calls
 
-**WebView for Dashboard:**
-
-```kotlin
-// clients/android/app/src/main/java/com/timetracker/webview/MainActivity.kt
-class MainActivity : AppCompatActivity() {
-    private lateinit var webView: WebView
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        webView = findViewById(R.id.webview)
-        webView.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-        }
-        webView.addJavascriptInterface(AndroidBridge(this), "AndroidBridge")
-        webView.loadUrl(BuildConfig.WEBAPP_URL)  // e.g. "https://app.timetracker.io"
-    }
-}
-
-// Bridge for passing device token from native to web app
-class AndroidBridge(private val context: Context) {
-    @JavascriptInterface
-    fun getDeviceKey(): String = DeviceRegistry.getKey(context)
-
-    @JavascriptInterface
-    fun getPlatform(): String = "android"
-}
-```
+**WebView for Dashboard:** `MainActivity` loads the React web app URL in an Android WebView. A native bridge (`AndroidBridge`) exposes two methods via `@JavascriptInterface`: `getDeviceKey()` and `getPlatform()`, so the web app can read the device identity without needing separate credentials.
 
 ---
 
 ### 6.2 Windows Collector (Go)
 
-```go
-// clients/windows/collector/windows_collector.go
-package collector
+The Windows collector is a Go application that runs as a system tray icon. It uses the Win32 API via `golang.org/x/sys/windows` to poll the foreground window every 30 seconds. It detects the active process name and window title, tracks session starts and ends, and buffers events locally. When the buffer reaches 10 events or a flush interval elapses, it POSTs the batch to the server.
 
-import (
-    "golang.org/x/sys/windows"
-    "time"
-    "unsafe"
-)
+Idle detection is done by reading the system's last-input timestamp via `GetLastInputInfo` and comparing against the user's configured `idle_threshold` seconds.
 
-var (
-    user32               = windows.NewLazyDLL("user32.dll")
-    procGetForeground    = user32.NewProc("GetForegroundWindow")
-    procGetWindowText    = user32.NewProc("GetWindowTextW")
-)
-
-type ActiveWindow struct {
-    Title     string
-    ProcessID uint32
-}
-
-func GetActiveWindow() (ActiveWindow, error) {
-    hwnd, _, _ := procGetForeground.Call()
-    if hwnd == 0 {
-        return ActiveWindow{}, nil
-    }
-
-    var pid uint32
-    windows.GetWindowThreadProcessId(windows.HWND(hwnd), &pid)
-
-    buf := make([]uint16, 256)
-    procGetWindowText.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), 256)
-
-    return ActiveWindow{
-        Title:     windows.UTF16ToString(buf),
-        ProcessID: pid,
-    }, nil
-}
-
-func GetProcessName(pid uint32) (string, error) {
-    handle, err := windows.OpenProcess(windows.PROCESS_QUERY_INFORMATION|windows.PROCESS_VM_READ, false, pid)
-    if err != nil {
-        return "", err
-    }
-    defer windows.CloseHandle(handle)
-
-    var buf [windows.MAX_PATH]uint16
-    size := uint32(len(buf))
-    err = windows.QueryFullProcessImageName(handle, 0, &buf[0], &size)
-    if err != nil {
-        return "", err
-    }
-    fullPath := windows.UTF16ToString(buf[:size])
-    // Extract just the exe name
-    parts := strings.Split(fullPath, `\`)
-    return parts[len(parts)-1], nil
-}
-```
-
-```go
-// clients/windows/cmd/main.go — polling loop
-func runCollector(apiClient *api.Client, deviceKey string) {
-    ticker := time.NewTicker(30 * time.Second)
-    var currentApp string
-    var sessionStart time.Time
-    pending := []api.EventInput{}
-
-    for range ticker.C {
-        win, _ := collector.GetActiveWindow()
-        appName, _ := collector.GetProcessName(win.ProcessID)
-        idle := idledetect.IsIdle(300) // 5 min idle threshold
-
-        now := time.Now()
-
-        if appName != currentApp && currentApp != "" {
-            pending = append(pending, api.EventInput{
-                AppName:     currentApp,
-                WindowTitle: win.Title,
-                StartTime:   sessionStart,
-                EndTime:     now,
-                IsIdle:      idle,
-            })
-            if len(pending) >= 10 {
-                apiClient.IngestEvents(deviceKey, pending)
-                pending = pending[:0]
-            }
-        }
-
-        currentApp = appName
-        sessionStart = now
-    }
-}
-```
+A WebView2 window can be launched from the tray to display the React web app dashboard inline.
 
 ---
 
 ### 6.3 Browser Extension
 
-```typescript
-// clients/extension/src/background/service-worker.ts
-const API_BASE = "https://api.timetracker.io/api/v1";
-let currentTab: { url: string; title: string; startTime: number } | null = null;
-const eventBuffer: EventInput[] = [];
+The extension targets Chrome, Edge (MV3), and Firefox (MV2). A background Service Worker listens to `chrome.tabs.onActivated` and `chrome.tabs.onUpdated` events to track tab switches and navigations. When the active tab changes, the previous tab's session duration is calculated and pushed into a local buffer (visits under 5 seconds are ignored). The buffer is flushed to the server every 60 seconds via a `fetch` call.
 
-chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-    const tab = await chrome.tabs.get(tabId);
-    flushCurrentTab();
-    currentTab = {
-        url: tab.url ?? "",
-        title: tab.title ?? "",
-        startTime: Date.now(),
-    };
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-    if (changeInfo.status === "complete" && tab.active) {
-        flushCurrentTab();
-        currentTab = {
-            url: tab.url ?? "",
-            title: tab.title ?? "",
-            startTime: Date.now(),
-        };
-    }
-});
-
-function flushCurrentTab() {
-    if (!currentTab) return;
-    const duration = (Date.now() - currentTab.startTime) / 1000;
-    if (duration < 5) return; // Ignore sub-5s visits
-
-    eventBuffer.push({
-        app_name: new URL(currentTab.url).hostname,
-        window_title: currentTab.title,
-        url: currentTab.url,
-        start_time: new Date(currentTab.startTime).toISOString(),
-        end_time: new Date().toISOString(),
-        is_idle: false,
-    });
-}
-
-// Flush buffer every 60s
-setInterval(async () => {
-    if (eventBuffer.length === 0) return;
-    const token = (await chrome.storage.local.get("token")).token;
-    const deviceKey = (await chrome.storage.local.get("device_key")).device_key;
-
-    await fetch(`${API_BASE}/events`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-            device_key: deviceKey,
-            events: [...eventBuffer],
-        }),
-    });
-    eventBuffer.length = 0;
-}, 60_000);
-```
+The extension stores the JWT token and `device_key` in `chrome.storage.local`. The popup UI provides a simple login form and displays today's tracked time.
 
 ---
 
@@ -1041,85 +259,30 @@ setInterval(async () => {
 
 ### 7.1 Schema
 
-```sql
--- Users
-CREATE TABLE users (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email         TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    display_name  TEXT,
-    timezone      TEXT NOT NULL DEFAULT 'UTC',
-    created_at    TIMESTAMPTZ DEFAULT NOW(),
-    updated_at    TIMESTAMPTZ DEFAULT NOW()
-);
+All tables are managed by GORM AutoMigrate. The following tables exist:
 
--- Devices
-CREATE TABLE devices (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name         TEXT NOT NULL,
-    platform     TEXT NOT NULL CHECK (platform IN ('android', 'windows', 'browser')),
-    device_key   TEXT UNIQUE NOT NULL,
-    last_seen_at TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ DEFAULT NOW()
-);
+**`users`** — Stores user accounts. Fields: `id` (UUID PK), `email` (unique), `password_hash`, `display_name`, `timezone` (default `UTC`), `created_at`, `updated_at`.
 
--- Categories
-CREATE TABLE categories (
-    id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id   UUID REFERENCES users(id) ON DELETE CASCADE,  -- NULL = system category
-    name      TEXT NOT NULL,
-    color     TEXT NOT NULL DEFAULT '#6B7280',
-    icon      TEXT,
-    is_system BOOLEAN DEFAULT FALSE,
-    rules     JSONB DEFAULT '[]'
-);
+**`devices`** — Stores registered devices per user. Fields: `id` (UUID PK), `user_id` (FK → users, CASCADE), `name`, `platform` (`android` | `windows` | `browser`, enforced by CHECK constraint), `device_key` (unique), `last_seen_at`, `created_at`.
 
--- Activity Events (primary data table)
-CREATE TABLE activity_events (
-    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    device_id      UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-    app_name       TEXT NOT NULL,
-    window_title   TEXT,
-    url            TEXT,
-    category_id    UUID REFERENCES categories(id),
-    start_time     TIMESTAMPTZ NOT NULL,
-    end_time       TIMESTAMPTZ NOT NULL,
-    duration_secs  INTEGER NOT NULL,
-    is_idle        BOOLEAN DEFAULT FALSE,
-    is_private     BOOLEAN DEFAULT FALSE,
-    raw_meta       JSONB,
-    created_at     TIMESTAMPTZ DEFAULT NOW()
-);
+**`categories`** — Stores categorization labels, either system-wide (`is_system = true`, `user_id = NULL`) or user-specific. Fields: `id` (UUID PK), `user_id` (nullable FK → users, CASCADE), `name`, `color` (default `#6B7280`), `icon`, `is_system`, `is_productive` (nullable boolean — `true` = productive, `false` = distraction, `NULL` = uncategorized), `rules` (JSONB array of matching rules).
 
--- Indexes for common queries
-CREATE INDEX idx_events_user_start ON activity_events(user_id, start_time DESC);
-CREATE INDEX idx_events_device ON activity_events(device_id);
-CREATE INDEX idx_events_category ON activity_events(category_id);
-CREATE INDEX idx_events_app_name ON activity_events(user_id, app_name);
+**`activity_events`** — Primary data table. Fields: `id` (UUID PK), `user_id` (FK → users, CASCADE), `device_id` (FK → devices, CASCADE), `app_name`, `window_title`, `url`, `category_id` (nullable FK → categories), `start_time`, `end_time`, `duration_secs`, `is_idle` (default `false`), `is_private` (default `false`), `raw_meta` (JSONB), `created_at`.
 
--- User settings
-CREATE TABLE user_settings (
-    user_id          UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    excluded_apps    TEXT[] DEFAULT '{}',
-    excluded_urls    TEXT[] DEFAULT '{}',
-    idle_threshold   INTEGER DEFAULT 300,
-    tracking_enabled BOOLEAN DEFAULT TRUE,
-    data_retention_days INTEGER DEFAULT 365,
-    updated_at       TIMESTAMPTZ DEFAULT NOW()
-);
-```
+**`user_settings`** — One-to-one with users. Fields: `user_id` (UUID PK, FK → users, CASCADE), `excluded_apps` (text[]), `excluded_urls` (text[]), `idle_threshold` (default 300s), `tracking_enabled` (default `true`), `data_retention_days` (default 365), `updated_at`.
 
-### 7.2 Category Rules Schema (JSONB)
+### 7.2 Indexes
 
-```json
-[
-    { "type": "app_name", "op": "contains", "value": "code" },
-    { "type": "url_domain", "op": "equals", "value": "github.com" },
-    { "type": "window_title", "op": "startsWith", "value": "YouTube" }
-]
-```
+| Index                   | Columns                      | Purpose                                        |
+| ----------------------- | ---------------------------- | ---------------------------------------------- |
+| `idx_events_user_start` | `(user_id, start_time DESC)` | Primary query pattern for timeline and summary |
+| `idx_events_device`     | `(device_id)`                | Device-filtered queries                        |
+| `idx_events_category`   | `(category_id)`              | Category breakdown queries                     |
+| `idx_events_app_name`   | `(user_id, app_name)`        | App usage aggregation                          |
+
+### 7.3 Category Rules Schema
+
+The `rules` JSONB column on categories stores an array of matching rule objects. Each rule has a `type` (`app_name`, `url_domain`, or `window_title`), an `op` (`contains`, `equals`, `startsWith`), and a `value` string. The auto-categorization job (future) evaluates these rules against incoming events.
 
 ---
 
@@ -1127,17 +290,11 @@ CREATE TABLE user_settings (
 
 ### Base URL
 
-```
-https://api.timetracker.io/api/v1
-```
+Development: `http://localhost:8080/api/v1`
 
 ### Authentication
 
-All protected endpoints require:
-
-```
-Authorization: Bearer <access_token>
-```
+All protected endpoints require an `Authorization: Bearer <access_token>` header.
 
 ---
 
@@ -1145,38 +302,18 @@ Authorization: Bearer <access_token>
 
 #### `POST /auth/register`
 
-```json
-// Request
-{ "email": "user@example.com", "password": "s3cure!", "display_name": "Alice" }
-
-// Response 201
-{ "user": { "id": "uuid", "email": "...", "display_name": "Alice" } }
-```
+**Request body:** `email`, `password`, `display_name`  
+**Response 201:** Returns the new user object with `access_token` and `refresh_token`.
 
 #### `POST /auth/login`
 
-```json
-// Request
-{ "email": "user@example.com", "password": "s3cure!" }
-
-// Response 200
-{
-  "access_token": "eyJ...",
-  "refresh_token": "eyJ...",
-  "expires_in": 3600,
-  "user": { "id": "uuid", "email": "...", "display_name": "Alice" }
-}
-```
+**Request body:** `email`, `password`  
+**Response 200:** Returns `access_token`, `refresh_token`, `expires_in`, and the user object.
 
 #### `POST /auth/refresh`
 
-```json
-// Request
-{ "refresh_token": "eyJ..." }
-
-// Response 200
-{ "access_token": "eyJ...", "expires_in": 3600 }
-```
+**Request body:** `refresh_token`  
+**Response 200:** Returns a new `access_token` and `refresh_token`.
 
 ---
 
@@ -1184,125 +321,68 @@ Authorization: Bearer <access_token>
 
 #### `POST /events` — Ingest activity events (called by collectors)
 
-```json
-// Request
-{
-  "device_key": "android-xxxx-uuid",
-  "events": [
-    {
-      "app_name": "Visual Studio Code",
-      "window_title": "router.go — time-tracker",
-      "url": "",
-      "start_time": "2026-02-25T09:00:00Z",
-      "end_time": "2026-02-25T09:30:00Z",
-      "is_idle": false
-    }
-  ]
-}
+**Request body:** `device_key` (string), `events` (array of event objects with `app_name`, `window_title`, `url`, `start_time`, `end_time`, `is_idle`). At least one event is required.  
+**Response 201:** Returns `{ "inserted": N }` where N is the count of valid events saved.
 
-// Response 201
-{ "inserted": 1 }
-```
+#### `GET /events?limit=50&offset=0`
 
-#### `GET /timeline?date=2026-02-25&device_id=optional`
+Returns a paginated list of raw activity events for the authenticated user, ordered by `start_time` descending.
 
-```json
-// Response 200
-{
-    "date": "2026-02-25",
-    "entries": [
-        {
-            "id": "uuid",
-            "app_name": "Visual Studio Code",
-            "window_title": "router.go",
-            "category": { "id": "uuid", "name": "Coding", "color": "#3B82F6" },
-            "device": {
-                "id": "uuid",
-                "name": "Work Laptop",
-                "platform": "windows"
-            },
-            "start_time": "2026-02-25T09:00:00Z",
-            "end_time": "2026-02-25T09:30:00Z",
-            "duration_secs": 1800,
-            "is_idle": false
-        }
-    ]
-}
-```
+#### `GET /timeline?date=YYYY-MM-DD`
 
-#### `GET /summary/daily?date=2026-02-25`
+Returns all events for the specified date, enriched with full `category` and `device` structs, ordered by `start_time` ascending.
 
-```json
-// Response 200
-{
-  "date": "2026-02-25",
-  "total_active_secs": 28800,
-  "total_idle_secs": 3600,
-  "productive_secs": 21600,
-  "distraction_secs": 7200,
-  "peak_hour": 10,
-  "top_apps": [
-    { "app_name": "VS Code", "category": {...}, "total_secs": 9000 }
-  ],
-  "category_breakdown": [
-    { "category": {...}, "total_secs": 21600, "percentage": 75.0 }
-  ],
-  "device_breakdown": [
-    { "device": {...}, "total_secs": 18000 }
-  ]
-}
-```
+#### `PATCH /events/:id`
 
-#### `PATCH /events/:id` — Edit a single event
-
-```json
-// Request
-{
-  "category_id": "uuid",
-  "window_title": "Updated title",
-  "is_private": true
-}
-
-// Response 200
-{ "event": { ...updated event... } }
-```
+**Request body (all optional):** `category_id` (string UUID or empty string to unset), `is_private` (boolean).  
+**Response 200:** Success confirmation.
 
 #### `DELETE /events/:id`
 
-```
-Response 204 No Content
-```
+**Response 200:** Success confirmation. Only the owning user can delete their events.
 
 ---
 
-### Devices Endpoints
+### Summary Endpoints
+
+#### `GET /summary/daily?date=YYYY-MM-DD`
+
+Returns a `DailySummary` object for the specified date. See Section 5.6 for the full field list.
+
+#### `GET /summary/weekly?date=YYYY-MM-DD`
+
+Returns a `WeeklySummary` containing global weekly totals plus a `daily_breakdown` array of 7 `DailySummary` objects (Mon–Sun of the week containing the provided date).
+
+---
+
+### Reports Endpoint
+
+#### `GET /reports?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD`
+
+Both date parameters are optional. Returns a `ReportData` object with: `total_active_secs`, `total_idle_secs`, `category_usage` (map of category name → seconds), `app_usage` (map of app name → seconds), `device_usage` (map of device name → seconds), `daily_active_trend` (map of date string → active seconds).
+
+---
+
+### Categories Endpoints
+
+#### `GET /categories`
+
+Returns all categories visible to the user — their own user-specific categories plus all system categories (`is_system = true`).
+
+#### `PATCH /categories/:id`
+
+**Request body (all optional):** `name`, `color`, `icon`, `is_productive` (boolean). Only the owning user's categories can be patched; system categories are protected.  
+**Response 200:** Success confirmation.
+
+---
+
+### Devices Endpoint
 
 #### `GET /devices`
 
-```json
-// Response 200
-{
-    "devices": [
-        {
-            "id": "uuid",
-            "name": "Work Laptop",
-            "platform": "windows",
-            "device_key": "windows-xxxx",
-            "last_seen_at": "2026-02-25T14:30:00Z"
-        }
-    ]
-}
-```
+Returns all devices registered to the authenticated user.
 
-#### `POST /devices/register`
-
-```json
-// Request
-{ "name": "My Phone", "platform": "android" }
-
-// Response 201
-{ "device_key": "android-generated-uuid", "device_id": "uuid" }
-```
+> **Note:** `POST /devices` (device registration) and `DELETE /devices/:id` are not yet implemented.
 
 ---
 
@@ -1310,40 +390,17 @@ Response 204 No Content
 
 #### `GET /settings`
 
-```json
-// Response 200
-{
-    "excluded_apps": ["Slack", "Discord"],
-    "excluded_urls": ["mail.google.com"],
-    "idle_threshold": 300,
-    "tracking_enabled": true,
-    "data_retention_days": 365
-}
-```
+Returns the user's current settings: `excluded_apps`, `excluded_urls`, `idle_threshold`, `tracking_enabled`, `data_retention_days`.
 
 #### `PUT /settings`
 
-```json
-// Request — send only fields to update
-{
-    "idle_threshold": 600,
-    "excluded_apps": ["Slack"]
-}
-```
+**Request body (all optional):** Any subset of the settings fields. Only provided fields are updated.
 
 ---
 
-### WebSocket
+### WebSocket (Deferred)
 
-#### `GET /ws?token=<access_token>`
-
-Upgrade to WebSocket. Server pushes messages:
-
-```json
-{ "type": "events_updated" }
-{ "type": "sync_complete", "device_id": "uuid" }
-{ "type": "category_updated" }
-```
+`GET /ws?token=<access_token>` — WebSocket upgrade endpoint. **Not yet implemented.** Planned to push `events_updated`, `sync_complete`, and `category_updated` messages. In the interim, the React app uses a 30-minute auto-refresh and a manual refresh button.
 
 ---
 
@@ -1352,22 +409,22 @@ Upgrade to WebSocket. Server pushes messages:
 ### JWT Strategy
 
 - **Access Token:** RS256, 1-hour expiry. Signed with a private key kept only on the server.
-- **Refresh Token:** Stored in the database with a 30-day expiry. Can be revoked server-side.
-- **Device Key:** A UUID assigned at device registration. Included in event POST requests alongside the JWT to bind events to a specific device.
+- **Refresh Token:** 30-day expiry. Can be invalidated server-side by rotating the token.
+- **Device Key:** A UUID assigned at device registration. Included in every event POST request alongside the JWT to bind events to a specific device.
 
 ### WebView Security
 
-The Android and Windows WebView embeds the web app from a trusted origin (`https://app.timetracker.io`). Native bridges (`AndroidBridge`, Windows equivalent) only expose the minimum needed: the device key and platform identifier. No raw API credentials are passed through the bridge.
+The Android and Windows WebView embeds the React web app from a trusted origin. Native bridges only expose the minimum needed: the `device_key` and `platform` identifier. No raw API credentials are passed through the bridge.
 
 ### Data Privacy
 
-- Events marked `is_private: true` are stored encrypted at rest (AES-256) and never appear in exports.
-- The `excluded_apps` and `excluded_urls` settings are enforced server-side: matching events are rejected at ingestion time.
-- Users can delete all data via `DELETE /account` which hard-deletes all records.
+- Events marked `is_private: true` are stored with the flag but **not** currently encrypted or filtered from reports. Privacy enforcement is planned.
+- The `excluded_apps` and `excluded_urls` settings are stored in `user_settings` but **not** enforced at ingestion time — all events are accepted regardless.
+- `DELETE /account` for full data deletion is not yet implemented.
 
 ### Rate Limiting
 
-All endpoints are rate-limited via Redis using a token bucket algorithm. The `/events` ingestion endpoint allows 60 requests/minute per device. Auth endpoints are limited to 10 requests/minute per IP.
+Rate limiting is planned but not yet implemented. The `RATE_LIMIT_RPM` config value is loaded from the environment but not applied to any middleware. The design calls for a token bucket approach with 60 requests/minute per device on `/events`, and 10 requests/minute per IP on auth endpoints.
 
 ---
 
@@ -1375,55 +432,32 @@ All endpoints are rate-limited via Redis using a token bucket algorithm. The `/e
 
 ### Event Ingestion Flow
 
-```
-[Collector detects activity]
-        │
-        ▼
-[Buffer events locally (30s–60s window)]
-        │
-        ▼
-[POST /api/v1/events with device_key + JWT]
-        │
-        ▼
-[Server validates JWT + device_key]
-        │
-        ▼
-[Deduplicate against recent events]
-        │
-        ▼
-[Batch INSERT into activity_events table]
-        │
-        ├──► [Enqueue Asynq categorization job]
-        │
-        └──► [WebSocket broadcast: "events_updated" to user's sessions]
-                        │
-                        ▼
-              [Vue app refetches timeline/summary]
-```
+1. Collector detects a change in active application or tab.
+2. Collector buffers events locally for 30–60 seconds.
+3. Collector POSTs the batch to `POST /api/v1/events` with `device_key` + JWT.
+4. Server validates JWT and resolves `device_key` to a known device.
+5. Server filters invalid events (duration ≤ 0).
+6. Server batch-inserts valid events into `activity_events`.
+7. _(Future)_ Server broadcasts `events_updated` signal via WebSocket.
+8. React app refetches timeline/summary on next refresh cycle (auto or manual).
 
 ### Timeline Query Flow
 
-```
-[User opens Timeline view]
-        │
-        ▼
-[GET /timeline?date=2026-02-25]
-        │
-        ▼
-[Server queries activity_events WHERE user_id + date range]
-        │
-        ▼
-[JOIN categories, devices]
-        │
-        ▼
-[Order by start_time ASC]
-        │
-        ▼
-[Return unified timeline across all devices]
-        │
-        ▼
-[Vue renders merged chronological view]
-```
+1. User opens the Timeline page.
+2. React app calls `GET /timeline?date=YYYY-MM-DD`.
+3. Server queries `activity_events` for the user + date range.
+4. GORM preloads `Category` and `Device` associations.
+5. Events are ordered by `start_time ASC`.
+6. Unified timeline returned — merges all devices into one chronological view.
+7. React renders events in a horizontal bar timeline, color-coded by category.
+
+### Summary Aggregation Flow
+
+1. React app calls `GET /summary/daily?date=YYYY-MM-DD`.
+2. Server fetches all events for the day.
+3. Server reduces in a single O(n) pass: accumulates `appUsageMap`, `deviceUsageMap`, `hourUsageMap`, total active/idle seconds, and productive/distraction seconds (based on `Category.IsProductive`).
+4. Peak hour is determined by scanning `hourUsageMap` for the max value.
+5. Aggregated `DailySummary` is returned and rendered on the dashboard.
 
 ---
 
@@ -1437,150 +471,59 @@ All three collectors report to the same central server independently. There is n
 - Windows: polls every 30 seconds
 - Browser Extension: flushes buffer every 60 seconds
 
-On first install, each client registers a device via `POST /devices/register` and persists the returned `device_key` locally. This key is used in every subsequent event POST.
+On first install, each client must be registered and assigned a `device_key`. Currently, device registration (`POST /devices`) is not exposed via API and must be done manually with a direct DB insert. This is a known gap — see the remaining gaps section in `SERVICE_LOGIC.md`.
 
-**Conflict handling:** Overlapping time ranges across different devices are allowed and stored as-is — the timeline view renders them as parallel lanes. Overlapping events on the _same_ device are deduplicated at ingestion using a 5-second overlap threshold.
+**Conflict handling:** Overlapping time ranges across different devices are allowed and stored as-is — the timeline view will render them as parallel lanes. There is **no** deduplication logic currently implemented at ingestion time.
 
 ---
 
-## 12. Deployment
+## 12. Deployment — 🔴 Planned
+
+> **Note:** No Docker or deployment infrastructure has been created yet. This section describes the planned setup.
 
 ### Docker Compose (Development)
 
-```yaml
-# docker/docker-compose.yml
-version: "3.9"
+A `docker/docker-compose.yml` will start PostgreSQL 16 and the Go server. The React app will run separately via `npm run dev` during development.
 
-services:
-    postgres:
-        image: postgres:16-alpine
-        environment:
-            POSTGRES_DB: timetracker
-            POSTGRES_USER: tt_user
-            POSTGRES_PASSWORD: dev_password
-        ports:
-            - "5432:5432"
-        volumes:
-            - pgdata:/var/lib/postgresql/data
+**Planned services:**
 
-    redis:
-        image: redis:7-alpine
-        ports:
-            - "6379:6379"
-
-    server:
-        build:
-            context: ../server
-            dockerfile: Dockerfile
-        ports:
-            - "8080:8080"
-        environment:
-            - DATABASE_URL=postgres://tt_user:dev_password@postgres:5432/timetracker
-            - REDIS_URL=redis://redis:6379
-            - JWT_PRIVATE_KEY_FILE=/secrets/private.pem
-            - JWT_PUBLIC_KEY_FILE=/secrets/public.pem
-        depends_on:
-            - postgres
-            - redis
-        volumes:
-            - ./secrets:/secrets:ro
-
-    webapp:
-        build:
-            context: ../webapp
-            dockerfile: Dockerfile
-        ports:
-            - "5173:80"
-        depends_on:
-            - server
-
-volumes:
-    pgdata:
-```
+- `postgres` — PostgreSQL 16 Alpine, exposed on port 5432, with a named volume for data persistence.
+- `server` — Built from a Go Dockerfile. Reads `DATABASE_URL`, JWT key files, and other config from environment variables.
 
 ### Server Dockerfile
 
-```dockerfile
-# server/Dockerfile
-FROM golang:1.22-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /server ./cmd/server
+Planned as a multi-stage build: `golang:1.24-alpine` compiles the binary, then the final image is `alpine:3.19` with just the binary and CA certificates.
 
-FROM alpine:3.19
-RUN apk add --no-cache ca-certificates
-COPY --from=builder /server /server
-EXPOSE 8080
-CMD ["/server"]
-```
+### Web App Deployment
 
-### Web App Dockerfile
-
-```dockerfile
-# webapp/Dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-```
-
-### Nginx Config (for Vue SPA routing)
-
-```nginx
-server {
-    listen 80;
-    root /usr/share/nginx/html;
-    index index.html;
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    location /api/ {
-        proxy_pass http://server:8080/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
+The React app will be built with `npm run build` (producing a `dist/` folder) and served as static files behind an Nginx reverse proxy with `try_files $uri /index.html` for client-side routing.
 
 ---
 
 ## 13. Environment Variables
 
-### Server
+### Server (✅ Exists in `server/.env.example`)
 
 | Variable               | Description                   | Example                             |
 | ---------------------- | ----------------------------- | ----------------------------------- |
-| `DATABASE_URL`         | PostgreSQL connection string  | `postgres://user:pass@host:5432/db` |
-| `REDIS_URL`            | Redis connection string       | `redis://localhost:6379`            |
-| `JWT_PRIVATE_KEY_FILE` | Path to RS256 private key PEM | `/secrets/private.pem`              |
-| `JWT_PUBLIC_KEY_FILE`  | Path to RS256 public key PEM  | `/secrets/public.pem`               |
-| `JWT_ACCESS_EXPIRY`    | Access token TTL (seconds)    | `3600`                              |
-| `JWT_REFRESH_EXPIRY`   | Refresh token TTL (seconds)   | `2592000`                           |
 | `SERVER_ADDR`          | Bind address                  | `:8080`                             |
 | `ENV`                  | Environment                   | `development` / `production`        |
+| `DATABASE_URL`         | PostgreSQL connection string  | `postgres://user:pass@host:5432/db` |
+| `REDIS_URL`            | Redis connection string       | `redis://localhost:6379`            |
+| `JWT_PRIVATE_KEY_FILE` | Path to RS256 private key PEM | `./secrets/private.pem`             |
+| `JWT_PUBLIC_KEY_FILE`  | Path to RS256 public key PEM  | `./secrets/public.pem`              |
+| `JWT_ACCESS_EXPIRY`    | Access token TTL (seconds)    | `3600`                              |
+| `JWT_REFRESH_EXPIRY`   | Refresh token TTL (seconds)   | `2592000`                           |
 | `RATE_LIMIT_RPM`       | Requests per minute per IP    | `60`                                |
 
-### Web App (Build-time via Vite)
+### Web App — 🔴 Planned (Build-time via Vite)
 
-| Variable            | Description           | Example                      |
-| ------------------- | --------------------- | ---------------------------- |
-| `VITE_API_BASE_URL` | API base URL          | `https://api.timetracker.io` |
-| `VITE_WS_URL`       | WebSocket URL         | `wss://api.timetracker.io`   |
-| `VITE_APP_VERSION`  | Displayed in settings | `1.0.0`                      |
+| Variable            | Description           | Example                        |
+| ------------------- | --------------------- | ------------------------------ |
+| `VITE_API_BASE_URL` | API base URL          | `http://localhost:8080/api/v1` |
+| `VITE_APP_VERSION`  | Displayed in settings | `1.0.0`                        |
 
-### Android Client
+### Android Wrapper — 🔴 Planned
 
 | Variable       | Description            |
 | -------------- | ---------------------- |
@@ -1593,87 +536,37 @@ server {
 
 ### Prerequisites
 
-- Go 1.22+
-- Node.js 20+
-- Docker + Docker Compose
-- Android Studio (for Android client)
-- Go + WebView2 SDK (for Windows client)
+- Go 1.24+
+- Node.js 20+ (for future React app and extension)
+- PostgreSQL 16 (running locally or in Docker)
 
-### 1. Clone and start infrastructure
+### 1. Start PostgreSQL
 
-```bash
-git clone https://github.com/yourorg/time-tracker
-cd time-tracker
-
-# Generate JWT keys
-mkdir -p docker/secrets
-openssl genrsa -out docker/secrets/private.pem 2048
-openssl rsa -in docker/secrets/private.pem -pubout -out docker/secrets/public.pem
-
-# Start Postgres and Redis
-cd docker && docker compose up postgres redis -d
-```
+Ensure PostgreSQL is running and accessible. The server reads its connection string from the `DATABASE_URL` environment variable in `server/.env`.
 
 ### 2. Run the Go server
 
-```bash
-cd server
-cp .env.example .env   # fill in values
-go mod download
+Copy `server/.env.example` to `server/.env` and fill in the database URL and JWT key paths. Run migrations with `make migrate` (or `go run ./cmd/migrate`). Start the server with `make run` (or `air` for hot-reload). Server runs at `http://localhost:8080`.
 
-# Run migrations
-go run ./cmd/migrate
+### 3. Run the React web app — 🔴 Not yet available
 
-# Start server
-go run ./cmd/server
-# Server available at http://localhost:8080
-```
+Once `ui/core/` is created, install dependencies with `npm install` and start the dev server with `npm run dev`.
 
-### 3. Run the Vue web app
+### 4. Run the browser extension — 🔴 Not yet available
 
-```bash
-cd webapp
-npm install
-cp .env.example .env.local  # set VITE_API_BASE_URL=http://localhost:8080
-npm run dev
-# App available at http://localhost:5173
-```
+Once `ui/wrappers/extension/` is created, install dependencies and run `npm run dev`.
 
-### 4. Run the browser extension (dev mode)
+### 5. Run Windows collector — 🔴 Not yet available
 
-```bash
-cd clients/extension
-npm install
-npm run dev   # Outputs to dist/
+Once `ui/wrappers/windows/` is created, run the Go collector directly.
 
-# Chrome: go to chrome://extensions → Load Unpacked → select dist/
-```
+### Useful Commands (currently available)
 
-### 5. Run Windows collector (optional)
-
-```bash
-cd clients/windows
-go run ./cmd/main.go
-```
-
-### Useful Scripts
-
-```bash
-# Run all server tests
-cd server && go test ./...
-
-# Run Vue unit tests
-cd webapp && npm run test:unit
-
-# Lint Vue app
-cd webapp && npm run lint
-
-# Build production Vue bundle
-cd webapp && npm run build
-
-# Generate Go API mocks
-cd server && go generate ./...
-```
+| Command                         | Description                         |
+| ------------------------------- | ----------------------------------- |
+| `make run` (in `server/`)       | Start Go server with air hot-reload |
+| `make migrate` (in `server/`)   | Run GORM auto-migrations            |
+| `go build ./...` (in `server/`) | Compile check                       |
 
 ---
 
