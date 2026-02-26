@@ -28,10 +28,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil) *gin.E
 	authController := controllers.NewAuthController(authService)
 
 	v1 := r.Group("/api/v1")
-	users := v1.Group("/users")
+	auth := v1.Group("/auth")
 
 	RegisterHealthRoutes(r, v1, healthController)
-	RegisterAuthRoutes(r, users, authController)
+	RegisterAuthRoutes(r, auth, authController, jwtUtil)
 
 	return r
 }

@@ -33,6 +33,18 @@ type RegisterUserParams struct {
 	Password string
 }
 
+type LoginUserParams struct {
+	Email    string
+	Password string
+}
+
+type LoginUserResult = RegisterUserResult
+
+type RefreshTokensResult struct {
+	AccessToken  string
+	RefreshToken string
+}
+
 func (s *AuthService) RegisterUser(params RegisterUserParams) (*RegisterUserResult, error) {
 
 	var existingUser models.User
@@ -70,5 +82,53 @@ func (s *AuthService) RegisterUser(params RegisterUserParams) (*RegisterUserResu
 		Name:         user.DisplayName,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *AuthService) LoginUser(params LoginUserParams) (*LoginUserResult, error) {
+	var user models.User
+
+	if err := s.db.Where("email = ?", params.Email).First(&user).Error; err != nil {
+		return nil, errors.New("User not found!")
+	}
+
+	isValidPassword := utils.CheckPassword(params.Password, user.PasswordHash)
+
+	if !isValidPassword {
+		return nil, errors.New("Invalid credentials!")
+	}
+
+	accessToken, err := s.jwtUtil.GenerateAccessToken(user.ID.String())
+	if err != nil {
+		return nil, errors.New("failed to generate access token")
+	}
+
+	refreshToken, err := s.jwtUtil.GenerateRefreshToken(user.ID.String())
+	if err != nil {
+		return nil, errors.New("failed to generate refresh token")
+	}
+
+	return &LoginUserResult{
+		UserId:       user.ID.String(),
+		Name:         user.DisplayName,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	}, nil
+}
+
+func (s *AuthService) RefreshTokens(userID string) (*RefreshTokensResult, error) {
+	newAccessToken, err := s.jwtUtil.GenerateAccessToken(userID)
+	if err != nil {
+		return nil, errors.New("failed to generate access token")
+	}
+
+	newRefreshToken, err := s.jwtUtil.GenerateRefreshToken(userID)
+	if err != nil {
+		return nil, errors.New("failed to generate refresh token")
+	}
+
+	return &RefreshTokensResult{
+		AccessToken:  newAccessToken,
+		RefreshToken: newRefreshToken,
 	}, nil
 }
