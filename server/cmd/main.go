@@ -22,7 +22,9 @@ func main() {
 		log.Fatalf("Failed to initialize JWT utility: %v", err)
 	}
 
-	router := routes.SetupRouter(cfg, db, jwtUtil)
+	rdb := database.ConnectRedis(cfg.RedisURL)
+
+	router := routes.SetupRouter(cfg, db, jwtUtil, rdb)
 	if err := router.Run(cfg.ServerAddr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

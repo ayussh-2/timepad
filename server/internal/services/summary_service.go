@@ -42,16 +42,17 @@ type DailySummary struct {
 }
 
 func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySummary, error) {
-	parsedDate, err := time.Parse("2006-01-02", date)
+	loc := s.userLocation(userID)
+	parsedDate, err := time.ParseInLocation("2006-01-02", date, loc)
 	if err != nil {
 		return nil, errors.New("invalid date format, use YYYY-MM-DD")
 	}
 
-	startOfDay := parsedDate.Truncate(24 * time.Hour)
+	startOfDay := time.Date(parsedDate.Year(), parsedDate.Month(), parsedDate.Day(), 0, 0, 0, 0, loc)
 	endOfDay := startOfDay.Add(24 * time.Hour)
 
 	var events []models.ActivityEvent
-	err = s.db.Where("user_id = ? AND start_time >= ? AND start_time < ?", userID, startOfDay, endOfDay).
+	err = s.db.Where("user_id = ? AND start_time >= ? AND start_time < ? AND is_private = false", userID, startOfDay, endOfDay).
 		Preload("Category").
 		Preload("Device").
 		Find(&events).Error
@@ -96,7 +97,7 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 		deviceUsageMap[e.Device.ID.String()] += e.DurationSecs
 		deviceDetailsMap[e.Device.ID.String()] = e.Device
 
-		startHour := e.StartTime.Hour()
+		startHour := e.StartTime.In(loc).Hour()
 		hourUsageMap[startHour] += e.DurationSecs
 	}
 
@@ -140,7 +141,8 @@ type WeeklySummary struct {
 }
 
 func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySummary, error) {
-	parsedDate, err := time.Parse("2006-01-02", date)
+	loc := s.userLocation(userID)
+	parsedDate, err := time.ParseInLocation("2006-01-02", date, loc)
 	if err != nil {
 		return nil, errors.New("invalid date format, use YYYY-MM-DD")
 	}
@@ -151,11 +153,12 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 		offset = -6
 	}
 
-	startOfWeek := parsedDate.AddDate(0, 0, offset).Truncate(24 * time.Hour)
+	monday := parsedDate.AddDate(0, 0, offset)
+	startOfWeek := time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, loc)
 	endOfWeek := startOfWeek.AddDate(0, 0, 7)
 
 	var events []models.ActivityEvent
-	err = s.db.Where("user_id = ? AND start_time >= ? AND start_time < ?", userID, startOfWeek, endOfWeek).
+	err = s.db.Where("user_id = ? AND start_time >= ? AND start_time < ? AND is_private = false", userID, startOfWeek, endOfWeek).
 		Preload("Category").
 		Preload("Device").
 		Find(&events).Error
@@ -229,7 +232,7 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 		dailyAppUsageMaps[dayIndex][e.AppName] += e.DurationSecs
 		dailyDeviceUsageMaps[dayIndex][e.Device.ID.String()] += e.DurationSecs
 		deviceDetailsMap[e.Device.ID.String()] = e.Device
-		dailyHourUsageMaps[dayIndex][e.StartTime.Hour()] += e.DurationSecs
+		dailyHourUsageMaps[dayIndex][e.StartTime.In(loc).Hour()] += e.DurationSecs
 	}
 
 	for app, secs := range appUsageMap {
@@ -268,4 +271,18 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 	}
 
 	return summary, nil
+}
+
+// userLocation loads the user's IANA timezone from the DB.
+// Falls back to UTC on any error.
+func (s *SummaryService) userLocation(userID string) *time.Location {
+	var user models.User
+	if err := s.db.Select("timezone").Where("id = ?", userID).First(&user).Error; err != nil {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }

@@ -1,16 +1,19 @@
 package routes
 
 import (
+	"context"
+
 	"github.com/ayussh-2/timepad/config"
 	"github.com/ayussh-2/timepad/internal/controllers"
 	"github.com/ayussh-2/timepad/internal/middleware"
 	"github.com/ayussh-2/timepad/internal/services"
 	"github.com/ayussh-2/timepad/internal/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
 
-func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil) *gin.Engine {
+func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil, rdb *redis.Client) *gin.Engine {
 	if cfg.Env == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -18,11 +21,13 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil) *gin.E
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
 	r.Use(middleware.CORS())
+	r.Use(middleware.RateLimit(cfg.RateLimitRPM))
 
 	// Initialize services
-	healthService := services.NewHealthService()
+	healthService := services.NewHealthServiceWithRedis(rdb)
 	authService := services.NewAuthService(db, jwtUtil)
-	eventsService := services.NewEventsService(db)
+	eventsService := services.NewEventsServiceWithQueue(db, rdb)
+	go eventsService.StartIngestWorker(context.Background())
 	summaryService := services.NewSummaryService(db)
 	reportsService := services.NewReportsService(db)
 	categoriesService := services.NewCategoriesService(db)

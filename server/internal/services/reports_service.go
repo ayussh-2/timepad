@@ -37,16 +37,17 @@ func (s *ReportsService) GetReports(userID string, params ReportParams) (*Report
 		return nil, errors.New("invalid user ID")
 	}
 
-	query := s.db.Where("user_id = ?", userID)
+	loc := s.userLocation(userID)
+	query := s.db.Where("user_id = ? AND is_private = false", userID)
 
 	if params.StartDate != "" {
-		if startDate, err := time.Parse("2006-01-02", params.StartDate); err == nil {
+		if startDate, err := time.ParseInLocation("2006-01-02", params.StartDate, loc); err == nil {
 			query = query.Where("start_time >= ?", startDate)
 		}
 	}
 
 	if params.EndDate != "" {
-		if endDate, err := time.Parse("2006-01-02", params.EndDate); err == nil {
+		if endDate, err := time.ParseInLocation("2006-01-02", params.EndDate, loc); err == nil {
 			query = query.Where("start_time < ?", endDate.AddDate(0, 0, 1))
 		}
 	}
@@ -85,4 +86,18 @@ func (s *ReportsService) GetReports(userID string, params ReportParams) (*Report
 	}
 
 	return report, nil
+}
+
+// userLocation loads the user's IANA timezone from the DB.
+// Falls back to UTC on any error.
+func (s *ReportsService) userLocation(userID string) *time.Location {
+	var user models.User
+	if err := s.db.Select("timezone").Where("id = ?", userID).First(&user).Error; err != nil {
+		return time.UTC
+	}
+	loc, err := time.LoadLocation(user.Timezone)
+	if err != nil {
+		return time.UTC
+	}
+	return loc
 }

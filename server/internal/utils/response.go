@@ -46,6 +46,11 @@ func Created(c *gin.Context, message string, data interface{}) {
 	Success(c, http.StatusCreated, message, data)
 }
 
+// Accepted sends a 202 Accepted response (used when work is queued asynchronously).
+func Accepted(c *gin.Context, message string, data interface{}) {
+	Success(c, http.StatusAccepted, message, data)
+}
+
 // Error sends an error response
 func Error(c *gin.Context, statusCode int, errorCode string, message string, details string) {
 	response := APIResponse{

@@ -1,7 +1,7 @@
 # Cross-Device Time Tracker — Technical Documentation
 
-**Version:** 1.1.0  
-**Last Updated:** February 2026  
+**Version:** 1.2.0  
+**Last Updated:** March 2026  
 **Status:** Draft
 
 ---
@@ -41,13 +41,14 @@ The architecture is a classic hub-and-spoke model. Each collector independently 
 
 ### Central Server
 
-| Component      | Choice        | Reason                                    |
-| -------------- | ------------- | ----------------------------------------- |
-| Language       | Go 1.24+      | Performant, low memory, great concurrency |
-| HTTP Framework | Gin           | Fast routing, middleware support          |
-| ORM            | GORM          | Clean Go ORM, good migration support      |
-| Database       | PostgreSQL 16 | Reliable, JSONB support, strong typing    |
-| Auth           | JWT (RS256)   | Stateless, works across devices           |
+| Component      | Choice              | Reason                                         |
+| -------------- | ------------------- | ---------------------------------------------- |
+| Language       | Go 1.24+            | Performant, low memory, great concurrency      |
+| HTTP Framework | Gin                 | Fast routing, middleware support               |
+| ORM            | GORM                | Clean Go ORM, good migration support           |
+| Database       | PostgreSQL 16       | Reliable, JSONB support, strong typing         |
+| Auth           | JWT (RS256)         | Stateless, works across devices                |
+| Queue / Cache  | Redis (go-redis v9) | Async event ingestion queue; optional/graceful |
 
 ### Web App (Dashboard UI)
 
@@ -101,7 +102,7 @@ The architecture is a classic hub-and-spoke model. Each collector independently 
 
 The monorepo is organized into two top-level areas: `server/` for the Go backend and `ui/` (planned) for all frontend and client code.
 
-**Server (`server/`)** — ✅ Exists. Contains the main Go application entry point under `cmd/`, with all business logic organized inside `internal/` using the following sub-packages: `controllers/` for HTTP handlers, `services/` for business logic, `models/` for GORM models, `routes/` for route registration, `middleware/` for auth and CORS, and `utils/` for shared helpers. Migrations live in the `cmd/migrate` directory. A `cmd/seed` directory also exists.
+**Server (`server/`)** — ✅ Exists. Contains the main Go application entry point under `cmd/`, with all business logic organized inside `internal/` using the following sub-packages: `controllers/` for HTTP handlers, `services/` for business logic, `models/` for GORM models, `routes/` for route registration, `middleware/` for auth, CORS, and rate-limiting, `database/` for PostgreSQL and Redis connection helpers, and `utils/` for shared helpers. Migrations live in the `cmd/migrate` directory. A `cmd/seed` and `cmd/purge` directory also exist.
 
 **UI Core (`ui/core/`)** — 🔴 Not yet created. Will be the React 19 web application — the single, shared dashboard UI. Planned as a standard Vite + React project with key directories: `components/`, `pages/`, `store/` (Zustand), `api/` (Axios wrappers), `types/`, and `hooks/`.
 
@@ -137,10 +138,23 @@ Currently registered protected endpoints:
 | GET    | `/summary/weekly` | `GetWeeklySummary` |
 | GET    | `/reports`        | `GetReports`       |
 | GET    | `/categories`     | `GetCategories`    |
+| POST   | `/categories`     | `CreateCategory`   |
 | PATCH  | `/categories/:id` | `UpdateCategory`   |
+| DELETE | `/categories/:id` | `DeleteCategory`   |
 | GET    | `/devices`        | `GetDevices`       |
+| POST   | `/devices`        | `RegisterDevice`   |
+| DELETE | `/devices/:id`    | `DeleteDevice`     |
 | GET    | `/settings`       | `GetSettings`      |
 | PUT    | `/settings`       | `UpdateSettings`   |
+
+Public auth endpoints:
+
+| Method | Path             | Handler         |
+| ------ | ---------------- | --------------- |
+| POST   | `/auth/register` | `Register`      |
+| POST   | `/auth/login`    | `Login`         |
+| GET    | `/auth/refresh`  | `Refresh`       |
+| DELETE | `/auth/account`  | `DeleteAccount` |
 
 ### 4.3 Models
 
@@ -148,14 +162,17 @@ All models live in `internal/models/models.go` and are managed by GORM AutoMigra
 
 ### 4.4 Event Ingestion
 
-`EventsService.IngestEvents` validates the `DeviceKey` against the calling user's devices, filters out events with zero or negative duration, and bulk-inserts valid events using `db.CreateInBatches(events, 100)`.
+`EventsService.IngestEvents` validates the `DeviceKey` against the calling user's devices, filters events matching the user's `ExcludedApps` / `ExcludedUrls` lists, and drops zero/negative-duration events.
+
+With Redis available the validated payload is pushed onto a Redis list (`timepad:ingest_queue`) and the controller responds **HTTP 202 Accepted**. A `StartIngestWorker` goroutine (started at server boot) pops jobs via `BRPOP` and calls `processEvents` which: batch-inserts via `CreateInBatches(100)`, runs `autoCategorize` (evaluates category `rules` JSONB and writes the first matching `category_id`), and updates `Device.LastSeenAt`.
+
+If Redis is unavailable at startup, the same `processEvents` logic runs synchronously and the controller responds **HTTP 201 Created**.
 
 ### 4.5 Background Jobs
 
-There are currently no scheduled background jobs running. The following are identified as future work:
-
-- **Auto-categorization job** — scan events with `category_id IS NULL` and apply user-defined category rules.
-- **Data retention purge** — delete events older than the user's `data_retention_days` setting.
+- **Ingest worker** — `EventsService.StartIngestWorker(ctx)` runs as a goroutine at server startup. Pops jobs from `timepad:ingest_queue` in Redis and processes them via `processEvents`. ✅
+- **Auto-categorization** — runs inline inside `processEvents` after each batch insert, applying category `rules` JSONB to newly inserted events with no existing category. ✅
+- **Data retention purge** — `PurgeService.PurgeExpiredEvents` deletes events older than each user's `data_retention_days` setting. Invoked manually via `go run ./cmd/purge` or an external cron job. ✅
 
 ---
 
@@ -282,7 +299,7 @@ All tables are managed by GORM AutoMigrate. The following tables exist:
 
 ### 7.3 Category Rules Schema
 
-The `rules` JSONB column on categories stores an array of matching rule objects. Each rule has a `type` (`app_name`, `url_domain`, or `window_title`), an `op` (`contains`, `equals`, `startsWith`), and a `value` string. The auto-categorization job (future) evaluates these rules against incoming events.
+The `rules` JSONB column on categories stores an array of matching rule objects. Each rule has a `type` (`app_name`, `url_domain`, or `window_title`), an `op` (`contains`, `equals`, `starts_with`), and a `value` string. After every successful batch insert, `autoCategorize` loads all user + system categories that have non-empty rules, pre-parses them once, then walks each newly inserted event that lacks a category and applies OR logic across rules. The first matching category wins and is written back via an UPDATE.
 
 ---
 
@@ -315,6 +332,10 @@ All protected endpoints require an `Authorization: Bearer <access_token>` header
 **Request body:** `refresh_token`  
 **Response 200:** Returns a new `access_token` and `refresh_token`.
 
+#### `DELETE /auth/account` — 🔒 Requires auth
+
+**Response 200:** Permanently deletes the authenticated user and all their data (devices, events, settings, categories) via ON DELETE CASCADE.
+
 ---
 
 ### Events Endpoints
@@ -322,15 +343,17 @@ All protected endpoints require an `Authorization: Bearer <access_token>` header
 #### `POST /events` — Ingest activity events (called by collectors)
 
 **Request body:** `device_key` (string), `events` (array of event objects with `app_name`, `window_title`, `url`, `start_time`, `end_time`, `is_idle`). At least one event is required.  
-**Response 201:** Returns `{ "inserted": N }` where N is the count of valid events saved.
+Events matching the user's `excluded_apps` / `excluded_urls` settings are silently dropped.  
+**Response 202** (Redis available): Returns `{ "queued": N }` — events are queued for async processing.  
+**Response 201** (Redis unavailable / sync fallback): Returns `{ "inserted": N }` where N is the count of valid events saved.
 
 #### `GET /events?limit=50&offset=0`
 
 Returns a paginated list of raw activity events for the authenticated user, ordered by `start_time` descending.
 
-#### `GET /timeline?date=YYYY-MM-DD`
+#### `GET /timeline?date=YYYY-MM-DD&cursor=<opaque>&limit=100`
 
-Returns all events for the specified date, enriched with full `category` and `device` structs, ordered by `start_time` ascending.
+Returns a paginated page of events for the specified date (interpreted in the user's timezone), enriched with full `category` and `device` structs, ordered by `start_time` ascending. Private events (`is_private = true`) are excluded. Response shape: `{ "events": [...], "next_cursor": "<base64>" }` — `next_cursor` is omitted when there are no more pages. Default `limit` is 100, maximum is 500.
 
 #### `PATCH /events/:id`
 
@@ -369,20 +392,36 @@ Both date parameters are optional. Returns a `ReportData` object with: `total_ac
 
 Returns all categories visible to the user — their own user-specific categories plus all system categories (`is_system = true`).
 
+#### `POST /categories`
+
+**Request body:** `name` (required), `color` (optional, defaults to `#6B7280`), `icon` (optional), `is_productive` (optional boolean).  
+**Response 201:** Returns the created category.
+
 #### `PATCH /categories/:id`
 
 **Request body (all optional):** `name`, `color`, `icon`, `is_productive` (boolean). Only the owning user's categories can be patched; system categories are protected.  
 **Response 200:** Success confirmation.
 
+#### `DELETE /categories/:id`
+
+**Response 200:** Nullifies `category_id` on all events referencing this category, then deletes the category. Only user-owned categories can be deleted.
+
 ---
 
-### Devices Endpoint
+### Devices Endpoints
 
 #### `GET /devices`
 
 Returns all devices registered to the authenticated user.
 
-> **Note:** `POST /devices` (device registration) and `DELETE /devices/:id` are not yet implemented.
+#### `POST /devices`
+
+**Request body:** `name` (required), `platform` (required: `android` | `windows` | `browser`).  
+**Response 201:** Returns the new device including its generated `device_key`.
+
+#### `DELETE /devices/:id`
+
+**Response 200:** Removes the device and cascades deletion to all its associated activity events.
 
 ---
 
@@ -418,13 +457,14 @@ The Android and Windows WebView embeds the React web app from a trusted origin. 
 
 ### Data Privacy
 
-- Events marked `is_private: true` are stored with the flag but **not** currently encrypted or filtered from reports. Privacy enforcement is planned.
-- The `excluded_apps` and `excluded_urls` settings are stored in `user_settings` but **not** enforced at ingestion time — all events are accepted regardless.
-- `DELETE /account` for full data deletion is not yet implemented.
+- Events marked `is_private: true` are **excluded** from all read endpoints: timeline, daily summary, weekly summary, and reports. The flag is fully enforced via `AND is_private = false` on all queries.
+- The `excluded_apps` and `excluded_urls` settings are enforced at **ingestion time** — matching events are silently dropped before DB insert (case-insensitive O(1) map lookup).
+- `DELETE /auth/account` permanently deletes the user and all associated data via ON DELETE CASCADE.
+- Encryption of private event content is not yet implemented.
 
 ### Rate Limiting
 
-Rate limiting is planned but not yet implemented. The `RATE_LIMIT_RPM` config value is loaded from the environment but not applied to any middleware. The design calls for a token bucket approach with 60 requests/minute per device on `/events`, and 10 requests/minute per IP on auth endpoints.
+A per-IP fixed-window rate limiter (`middleware.RateLimit`) is active globally on all routes. The window resets every 60 seconds. The limit is controlled by the `RATE_LIMIT_RPM` environment variable (default: 60 req/min). Requests exceeding the limit receive HTTP 429.
 
 ---
 
@@ -436,19 +476,20 @@ Rate limiting is planned but not yet implemented. The `RATE_LIMIT_RPM` config va
 2. Collector buffers events locally for 30–60 seconds.
 3. Collector POSTs the batch to `POST /api/v1/events` with `device_key` + JWT.
 4. Server validates JWT and resolves `device_key` to a known device.
-5. Server filters invalid events (duration ≤ 0).
-6. Server batch-inserts valid events into `activity_events`.
-7. _(Future)_ Server broadcasts `events_updated` signal via WebSocket.
-8. React app refetches timeline/summary on next refresh cycle (auto or manual).
+5. Server filters excluded apps/URLs and invalid events (duration ≤ 0).
+6. _(Async path)_ Server enqueues payload to Redis and returns **HTTP 202** immediately.
+7. `IngestWorker` goroutine pops the job and calls `processEvents`: `CreateInBatches(100)` → `autoCategorize` → `LastSeenAt` update.
+8. _(Sync fallback, no Redis)_ `processEvents` runs inline and server returns **HTTP 201**.
+9. React app refetches timeline/summary on next refresh cycle (auto or manual).
 
 ### Timeline Query Flow
 
 1. User opens the Timeline page.
-2. React app calls `GET /timeline?date=YYYY-MM-DD`.
-3. Server queries `activity_events` for the user + date range.
+2. React app calls `GET /timeline?date=YYYY-MM-DD&limit=100` (passes `cursor` on subsequent pages).
+3. Server parses the date in the user's timezone, applies `is_private = false` filter, and adds `start_time > cursorTime` when a cursor is provided.
 4. GORM preloads `Category` and `Device` associations.
-5. Events are ordered by `start_time ASC`.
-6. Unified timeline returned — merges all devices into one chronological view.
+5. Events are ordered by `start_time ASC`; `limit + 1` are fetched to detect next page.
+6. Response includes `next_cursor` (base64 timestamp) if another page exists.
 7. React renders events in a horizontal bar timeline, color-coded by category.
 
 ### Summary Aggregation Flow
@@ -471,7 +512,7 @@ All three collectors report to the same central server independently. There is n
 - Windows: polls every 30 seconds
 - Browser Extension: flushes buffer every 60 seconds
 
-On first install, each client must be registered and assigned a `device_key`. Currently, device registration (`POST /devices`) is not exposed via API and must be done manually with a direct DB insert. This is a known gap — see the remaining gaps section in `SERVICE_LOGIC.md`.
+On first install, each client must be registered via `POST /api/v1/devices` (providing `name` and `platform`) to receive a `device_key`. The returned `device_key` is then included in every subsequent `POST /events` batch.
 
 **Conflict handling:** Overlapping time ranges across different devices are allowed and stored as-is — the timeline view will render them as parallel lanes. There is **no** deduplication logic currently implemented at ingestion time.
 

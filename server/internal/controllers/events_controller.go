@@ -43,13 +43,17 @@ func (ec *EventsController) IngestEvents(c *gin.Context) {
 		Events:    req.Events,
 	}
 
-	inserted, err := ec.service.IngestEvents(params)
+	result, err := ec.service.IngestEvents(params)
 	if err != nil {
 		utils.HandleError(c, "Failed to ingest events", err)
 		return
 	}
 
-	utils.Created(c, "Events ingested successfully", gin.H{"inserted": inserted})
+	if result.Queued {
+		utils.Accepted(c, "Events queued for processing", gin.H{"queued": result.Count})
+	} else {
+		utils.Created(c, "Events ingested successfully", gin.H{"inserted": result.Count})
+	}
 }
 
 func (ec *EventsController) GetEvents(c *gin.Context) {
@@ -93,13 +97,22 @@ func (ec *EventsController) GetTimeline(c *gin.Context) {
 		return
 	}
 
-	events, err := ec.service.GetTimeline(userID.(string), date)
+	cursor := c.Query("cursor")
+	limit := 100
+	if l, err := strconv.Atoi(c.DefaultQuery("limit", "100")); err == nil && l > 0 {
+		if l > 500 {
+			l = 500
+		}
+		limit = l
+	}
+
+	page, err := ec.service.GetTimeline(userID.(string), date, cursor, limit)
 	if err != nil {
 		utils.HandleError(c, "Failed to fetch timeline", err)
 		return
 	}
 
-	utils.OK(c, "Timeline fetched successfully", events)
+	utils.OK(c, "Timeline fetched successfully", page)
 }
 
 func (ec *EventsController) EditEvent(c *gin.Context) {

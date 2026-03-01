@@ -4,44 +4,52 @@ This document outlines key technical debts and systemic weaknesses identified du
 
 ## 1. Synchronous Telemetry Ingestion Flow
 
+**Status: ✅ Resolved**
+
 **The Problem**:
-Currently, `EventsService.IngestEvents` receives bulk event blocks and synchronously commits them to PostgreSQL before responding to the client device. This couples the frontend response latency directly to the database I/O performance. As devices scale or DB load increases, clients could face timeouts or battery drain.
+Previously, `EventsService.IngestEvents` synchronously committed events to PostgreSQL before responding, coupling client latency to DB I/O.
 
-**The Solution**:
-Introduce an **Asynchronous Message Queue** (like Asynq, which is already referenced in `TECHNICAL_DOC.md` but not leveraged in the ingestion path).
+**Implementation**:
 
-1. The `/events` controller instantly acknowledges receipt (HTTP 202 Accepted) after dropping the payload onto a Redis queue.
-2. Background workers pop items off the queue and batch-insert them into PostgreSQL at safe, controlled limits without blocking web threads.
+- `POST /events` validates the device and filters events, then enqueues the payload onto a Redis list (`timepad:ingest_queue`) and returns **HTTP 202 Accepted** immediately.
+- A `StartIngestWorker(ctx)` goroutine (started at server boot) runs a `BRPOP` loop, pops jobs, and calls `processEvents` which does `CreateInBatches(100)`, auto-categorization, and `LastSeenAt` update.
+- **Graceful degradation**: if Redis is unreachable at startup, `rdb` is `nil`, the worker is a no-op, and the server falls back to synchronous inserts (HTTP 201) transparently.
 
 ## 2. Lack of Pagination on Timeline Retrieval
 
+**Status: ✅ Resolved**
+
 **The Problem**:
-`GetTimeline` natively fetches an entire day's worth of `ActivityEvent` records. Power users tracking window focus changes might generate 10,000+ tiny events per day. Fetching, serializing, and transmitting this array as a single JSON block will cause Out-Of-Memory (OOM) errors on the Go server and severely crash the browser renderer trying to parse the massive payload.
+Previously, `GetTimeline` fetched an entire day's events in one unbound query — a potential OOM risk for power users.
 
-**The Solution**:
-Implement **Cursor-based Pagination**:
+**Implementation**:
 
-1. Change the API to return a limited set (e.g., `LIMIT 100`).
-2. Include a `next_cursor` (an encrypted string holding the `id` or `timestamp` of the last record) to securely and quickly fetch the next batch using `WHERE start_time > ?`.
+- `GetTimeline` now accepts `cursor` (opaque base64-encoded RFC3339Nano timestamp) and `limit` (default 100, max 500) query params.
+- Internally adds `WHERE start_time > cursorTime` and fetches `limit + 1` rows to detect the next page.
+- Response shape: `{ "events": [...], "next_cursor": "<base64>" }` — `next_cursor` is omitted on the last page.
 
 ## 3. String-based Error Handlers
 
+**Status: ✅ Resolved**
+
 **The Problem**:
-Most API controllers invoke utility responders (`utils.InternalServerError`) by explicitly parsing Go errors into raw strings (`err.Error()`). This creates a vulnerability where database query leaks or sensitive driver messages are dumped natively to the client interface.
+Previously, raw `err.Error()` strings (including potential SQL driver messages) were sent directly to clients.
 
-**The Solution**:
-Implement **Domain Errors**:
+**Implementation**:
 
-1. Wrap all `models` and `services` layer errors logically using custom typed structs (e.g., `ErrRecordNotFound()`, `ErrUnauthorized()`).
-2. Have `utils.go` detect the type of error and translate internal flags to standard UX-friendly messages like "An unexpected system error occurred" while only logging the raw SQL dumps securely on the backend terminal.
+- `utils.AppError` is a typed struct carrying an HTTP status code and a safe user-facing message.
+- Constructor helpers: `NewNotFoundError`, `NewBadRequestError`, `NewConflictError`.
+- `utils.HandleError(c, fallbackMsg, err)` uses `errors.As` to detect `*AppError` and maps it to the correct HTTP status; any non-`AppError` falls back to a generic **500** message — the raw error is only logged server-side.
 
 ## 4. Hardcoded Timezone Overrides
 
+**Status: ✅ Resolved**
+
 **The Problem**:
-The `GetDailySummary` and `GetWeeklySummary` aggregation mechanisms force parsing inputs assuming the server's local timezone (truncating to 24-hour UTC blocks via `time.Parse`). The database itself runs universally in UTC. If a user in Tokyo requests their `2026-02-26` summary, they will receive data fundamentally shifted by 9 hours, polluting their dashboard.
+Previously, all summary and timeline date parsing used `time.Parse` (UTC), causing shifted day boundaries for non-UTC users.
 
-**The Solution**:
-Utilize the User's `Timezone` preference native to `UserSetting`:
+**Implementation**:
 
-1. Controllers must parse incoming dates mapping onto the specific location `time.LoadLocation(user.Timezone)`.
-2. Push date-shifting calculations away from the Go application and directly into PostgreSQL via `AT TIME ZONE` SQL queries to accurately slice day boundaries dynamically per user context.
+- Each service (`SummaryService`, `ReportsService`, `EventsService`) has a `userLocation(userID) *time.Location` helper that fetches `User.Timezone` from the DB and calls `time.LoadLocation`; falls back to `time.UTC` on any error.
+- All date parsing switched to `time.ParseInLocation("2006-01-02", date, loc)` and day boundaries constructed via `time.Date(y, m, d, 0, 0, 0, 0, loc)` instead of `Truncate(24h)`.
+- Peak-hour bucketing in summary services uses `e.StartTime.In(loc).Hour()` rather than bare `.Hour()`.

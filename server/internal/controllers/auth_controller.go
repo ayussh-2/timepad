@@ -94,3 +94,18 @@ func (ac *AuthController) Refresh(c *gin.Context) {
 
 	utils.OK(c, "Tokens refreshed successfully", result)
 }
+
+func (ac *AuthController) DeleteAccount(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "User ID not found in context")
+		return
+	}
+
+	if err := ac.service.DeleteAccount(userID.(string)); err != nil {
+		utils.HandleError(c, "Failed to delete account", err)
+		return
+	}
+
+	utils.OK(c, "Account deleted successfully", nil)
+}

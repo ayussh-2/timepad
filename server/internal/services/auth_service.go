@@ -142,3 +142,16 @@ func (s *AuthService) RefreshTokens(userID string) (*RefreshTokensResult, error)
 		RefreshToken: newRefreshToken,
 	}, nil
 }
+
+// DeleteAccount permanently removes the user and all their associated data
+// via the CASCADE constraints defined on the database relations.
+func (s *AuthService) DeleteAccount(userID string) error {
+	result := s.db.Where("id = ?", userID).Delete(&models.User{})
+	if result.Error != nil {
+		return errors.New("failed to delete account")
+	}
+	if result.RowsAffected == 0 {
+		return utils.NewNotFoundError("user not found")
+	}
+	return nil
+}
