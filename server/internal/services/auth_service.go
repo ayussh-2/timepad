@@ -67,6 +67,16 @@ func (s *AuthService) RegisterUser(params RegisterUserParams) (*RegisterUserResu
 		return nil, errors.New("Fail to create new user!")
 	}
 
+	// Create default settings for the new user.
+	defaultSettings := models.UserSetting{
+		UserID:            user.ID,
+		IdleThreshold:     300,
+		TrackingEnabled:   true,
+		DataRetentionDays: 365,
+	}
+	// Ignore error – settings can be created later via PUT /settings.
+	_ = s.db.Create(&defaultSettings).Error
+
 	accessToken, err := s.jwtUtil.GenerateAccessToken(user.ID.String())
 	if err != nil {
 		return nil, errors.New("failed to generate access token")

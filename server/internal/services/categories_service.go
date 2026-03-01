@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ayussh-2/timepad/internal/models"
+	"github.com/ayussh-2/timepad/internal/utils"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -74,7 +75,7 @@ type UpdateCategoryParams struct {
 func (s *CategoriesService) UpdateCategory(userID string, categoryID string, params UpdateCategoryParams) error {
 	var category models.Category
 	if err := s.db.Where("id = ? AND user_id = ?", categoryID, userID).First(&category).Error; err != nil {
-		return errors.New("category not found or unauthorized")
+		return utils.NewNotFoundError("category not found or unauthorized")
 	}
 
 	updates := map[string]interface{}{}
@@ -116,7 +117,7 @@ func (s *CategoriesService) DeleteCategory(userID string, categoryID string) err
 			return errors.New("failed to delete category")
 		}
 		if result.RowsAffected == 0 {
-			return errors.New("category not found or unauthorized")
+			return utils.NewNotFoundError("category not found or unauthorized")
 		}
 		return nil
 	})

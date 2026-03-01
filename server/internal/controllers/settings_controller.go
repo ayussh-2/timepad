@@ -25,7 +25,7 @@ func (sc *SettingsController) GetSettings(c *gin.Context) {
 
 	settings, err := sc.service.GetSettings(userID.(string))
 	if err != nil {
-		utils.InternalServerError(c, "Failed to fetch settings", err)
+		utils.HandleError(c, "Failed to fetch settings", err)
 		return
 	}
 
@@ -47,7 +47,7 @@ func (sc *SettingsController) UpdateSettings(c *gin.Context) {
 
 	err := sc.service.UpdateSettings(userID.(string), req)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to update settings", err)
+		utils.HandleError(c, "Failed to update settings", err)
 		return
 	}
 

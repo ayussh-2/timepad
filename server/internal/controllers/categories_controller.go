@@ -25,7 +25,7 @@ func (cc *CategoriesController) GetCategories(c *gin.Context) {
 
 	categories, err := cc.service.GetCategories(userID.(string))
 	if err != nil {
-		utils.InternalServerError(c, "Failed to fetch categories", err)
+		utils.HandleError(c, "Failed to fetch categories", err)
 		return
 	}
 
@@ -49,7 +49,7 @@ func (cc *CategoriesController) UpdateCategory(c *gin.Context) {
 
 	err := cc.service.UpdateCategory(userID.(string), categoryID, req)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to update category", err)
+		utils.HandleError(c, "Failed to update category", err)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (cc *CategoriesController) CreateCategory(c *gin.Context) {
 
 	category, err := cc.service.CreateCategory(userID.(string), req)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to create category", err)
+		utils.HandleError(c, "Failed to create category", err)
 		return
 	}
 
@@ -89,7 +89,7 @@ func (cc *CategoriesController) DeleteCategory(c *gin.Context) {
 
 	err := cc.service.DeleteCategory(userID.(string), categoryID)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to delete category", err)
+		utils.HandleError(c, "Failed to delete category", err)
 		return
 	}
 

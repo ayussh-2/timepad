@@ -6,10 +6,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/datatypes"
+	"gorm.io/gorm"
 )
 
 type User struct {
-	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
 	Email        string    `gorm:"unique;not null"`
 	PasswordHash string    `gorm:"not null" json:"-"`
 	DisplayName  string
@@ -22,7 +23,7 @@ type User struct {
 }
 
 type Device struct {
-	ID         uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID         uuid.UUID `gorm:"type:uuid;primaryKey"`
 	UserID     uuid.UUID `gorm:"not null"`
 	User       User      `gorm:"constraint:OnDelete:CASCADE;" json:"-"`
 	Name       string    `gorm:"not null"`
@@ -33,7 +34,7 @@ type Device struct {
 }
 
 type Category struct {
-	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
 	UserID       *uuid.UUID
 	User         User   `gorm:"constraint:OnDelete:CASCADE;" json:"-"`
 	Name         string `gorm:"not null"`
@@ -45,7 +46,7 @@ type Category struct {
 }
 
 type ActivityEvent struct {
-	ID           uuid.UUID `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID           uuid.UUID `gorm:"type:uuid;primaryKey"`
 	UserID       uuid.UUID `gorm:"not null;index:idx_events_user_start,priority:1;index:idx_events_app_name,priority:1"`
 	User         User      `gorm:"constraint:OnDelete:CASCADE;" json:"-"`
 	DeviceID     uuid.UUID `gorm:"not null;index:idx_events_device"`
@@ -53,8 +54,8 @@ type ActivityEvent struct {
 	AppName      string    `gorm:"not null;index:idx_events_app_name,priority:2"`
 	WindowTitle  string
 	Url          string
-	CategoryID   *uuid.UUID `gorm:"index:idx_events_category"`
-	Category     Category   `json:"-"`
+	CategoryID   *uuid.UUID     `gorm:"index:idx_events_category"`
+	Category     Category       `json:"-"`
 	StartTime    time.Time      `gorm:"not null;index:idx_events_user_start,priority:2,sort:desc"`
 	EndTime      time.Time      `gorm:"not null"`
 	DurationSecs int            `gorm:"not null"`
@@ -73,4 +74,35 @@ type UserSetting struct {
 	TrackingEnabled   bool           `gorm:"default:true"`
 	DataRetentionDays int            `gorm:"default:365"`
 	UpdatedAt         time.Time
+}
+
+// BeforeCreate hooks auto-generate UUID primary keys when the ID is the zero value.
+// This makes the models portable across PostgreSQL (gen_random_uuid()) and SQLite.
+
+func (u *User) BeforeCreate(_ *gorm.DB) error {
+	if u.ID == uuid.Nil {
+		u.ID = uuid.New()
+	}
+	return nil
+}
+
+func (d *Device) BeforeCreate(_ *gorm.DB) error {
+	if d.ID == uuid.Nil {
+		d.ID = uuid.New()
+	}
+	return nil
+}
+
+func (c *Category) BeforeCreate(_ *gorm.DB) error {
+	if c.ID == uuid.Nil {
+		c.ID = uuid.New()
+	}
+	return nil
+}
+
+func (a *ActivityEvent) BeforeCreate(_ *gorm.DB) error {
+	if a.ID == uuid.Nil {
+		a.ID = uuid.New()
+	}
+	return nil
 }

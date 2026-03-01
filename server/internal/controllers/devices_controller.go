@@ -25,7 +25,7 @@ func (dc *DevicesController) GetDevices(c *gin.Context) {
 
 	devices, err := dc.service.GetDevices(userID.(string))
 	if err != nil {
-		utils.InternalServerError(c, "Failed to fetch devices", err)
+		utils.HandleError(c, "Failed to fetch devices", err)
 		return
 	}
 
@@ -47,7 +47,7 @@ func (dc *DevicesController) RegisterDevice(c *gin.Context) {
 
 	device, err := dc.service.RegisterDevice(userID.(string), req)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to register device", err)
+		utils.HandleError(c, "Failed to register device", err)
 		return
 	}
 
@@ -65,7 +65,7 @@ func (dc *DevicesController) DeleteDevice(c *gin.Context) {
 
 	err := dc.service.DeleteDevice(userID.(string), deviceID)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to delete device", err)
+		utils.HandleError(c, "Failed to delete device", err)
 		return
 	}
 

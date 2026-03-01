@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ayussh-2/timepad/internal/models"
+	"github.com/ayussh-2/timepad/internal/utils"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -43,7 +44,7 @@ type UpdateEventParams struct {
 func (s *EventsService) IngestEvents(params IngestEventsParams) (int, error) {
 	var device models.Device
 	if err := s.db.Where("device_key = ? AND user_id = ?", params.DeviceKey, params.UserID).First(&device).Error; err != nil {
-		return 0, errors.New("unknown device")
+		return 0, utils.NewNotFoundError("unknown device")
 	}
 
 	userID, err := uuid.Parse(params.UserID)
@@ -155,7 +156,7 @@ func (s *EventsService) GetTimeline(userID string, date string) ([]models.Activi
 func (s *EventsService) EditEvent(userID string, eventID string, params UpdateEventParams) error {
 	var event models.ActivityEvent
 	if err := s.db.Where("id = ? AND user_id = ?", eventID, userID).First(&event).Error; err != nil {
-		return errors.New("event not found or unauthorized")
+		return utils.NewNotFoundError("event not found or unauthorized")
 	}
 
 	updates := map[string]interface{}{}
@@ -189,7 +190,7 @@ func (s *EventsService) DeleteEvent(userID string, eventID string) error {
 		return errors.New("failed to delete event")
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("event not found or unauthorized")
+		return utils.NewNotFoundError("event not found or unauthorized")
 	}
 	return nil
 }

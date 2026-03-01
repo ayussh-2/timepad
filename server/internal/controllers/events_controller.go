@@ -45,7 +45,7 @@ func (ec *EventsController) IngestEvents(c *gin.Context) {
 
 	inserted, err := ec.service.IngestEvents(params)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to ingest events", err)
+		utils.HandleError(c, "Failed to ingest events", err)
 		return
 	}
 
@@ -73,7 +73,7 @@ func (ec *EventsController) GetEvents(c *gin.Context) {
 
 	events, err := ec.service.GetEvents(userID.(string), limit, offset)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to fetch events", err)
+		utils.HandleError(c, "Failed to fetch events", err)
 		return
 	}
 
@@ -95,7 +95,7 @@ func (ec *EventsController) GetTimeline(c *gin.Context) {
 
 	events, err := ec.service.GetTimeline(userID.(string), date)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to fetch timeline", err)
+		utils.HandleError(c, "Failed to fetch timeline", err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func (ec *EventsController) EditEvent(c *gin.Context) {
 
 	err := ec.service.EditEvent(userID.(string), eventID, req)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to update event", err)
+		utils.HandleError(c, "Failed to update event", err)
 		return
 	}
 
@@ -137,7 +137,7 @@ func (ec *EventsController) DeleteEvent(c *gin.Context) {
 
 	err := ec.service.DeleteEvent(userID.(string), eventID)
 	if err != nil {
-		utils.InternalServerError(c, "Failed to delete event", err)
+		utils.HandleError(c, "Failed to delete event", err)
 		return
 	}
 

@@ -49,6 +49,17 @@ func NewJWTUtil(cfg *config.Config) (*JWTUtil, error) {
 	}, nil
 }
 
+// NewJWTUtilFromKeys creates a JWTUtil directly from in-memory RSA keys.
+// Useful in tests to avoid reading key files from disk.
+func NewJWTUtilFromKeys(privateKey *rsa.PrivateKey, publicKey *rsa.PublicKey) *JWTUtil {
+	return &JWTUtil{
+		privateKey:    privateKey,
+		publicKey:     publicKey,
+		accessExpiry:  15 * time.Minute,
+		refreshExpiry: 7 * 24 * time.Hour,
+	}
+}
+
 func (j *JWTUtil) GenerateAccessToken(userID string) (string, error) {
 	claims := AuthClaims{
 		UserID: userID,

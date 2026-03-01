@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/ayussh-2/timepad/internal/models"
+	"github.com/ayussh-2/timepad/internal/utils"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -62,7 +63,7 @@ func (s *DevicesService) DeleteDevice(userID string, deviceID string) error {
 		return errors.New("failed to delete device")
 	}
 	if result.RowsAffected == 0 {
-		return errors.New("device not found or unauthorized")
+		return utils.NewNotFoundError("device not found or unauthorized")
 	}
 	return nil
 }
