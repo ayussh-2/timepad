@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { devicesApi } from "~/app/api/devices";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useNativeBridge } from "~/hooks/use-native-bridge";
+import { useAuthStore } from "~/store/auth.store";
 import type { Device } from "~/app/types";
 import {
     AlertDialog,
@@ -57,6 +58,7 @@ function RegisterDeviceSheet({
     onRegistered,
 }: RegisterSheetProps) {
     const bridge = useNativeBridge();
+    const { accessToken, refreshToken } = useAuthStore();
     const [name, setName] = useState("");
     const [platform, setPlatform] = useState<"android" | "windows" | "browser">(
         "windows",
@@ -91,6 +93,14 @@ function RegisterDeviceSheet({
             const device = await devicesApi.register(name.trim(), platform);
             setCreated(device);
             onRegistered(device);
+            if (
+                bridge.isNative &&
+                bridge.platform === "windows" &&
+                accessToken &&
+                refreshToken
+            ) {
+                bridge.saveConfig(accessToken, refreshToken, device.device_key);
+            }
         } catch {
             setError("Registration failed.");
         } finally {

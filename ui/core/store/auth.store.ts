@@ -31,6 +31,11 @@ export const useAuthStore = create<AuthState>()(
                     accessToken: data.access_token,
                     refreshToken: data.refresh_token,
                 });
+                (window as any).timePadSaveConfig?.(
+                    data.access_token,
+                    data.refresh_token,
+                    "",
+                );
             },
 
             register: async (email, password, displayName) => {
@@ -44,6 +49,11 @@ export const useAuthStore = create<AuthState>()(
                     accessToken: data.access_token,
                     refreshToken: data.refresh_token,
                 });
+                (window as any).timePadSaveConfig?.(
+                    data.access_token,
+                    data.refresh_token,
+                    "",
+                );
             },
 
             logout: () =>

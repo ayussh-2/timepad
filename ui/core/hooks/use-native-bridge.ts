@@ -3,12 +3,21 @@ interface NativeBridge {
     getPlatform: () => string;
 }
 
+type SaveConfigFn = (
+    accessToken: string,
+    refreshToken: string,
+    deviceKey: string,
+) => void;
+
 export function useNativeBridge() {
-    const bridge =
+    const win =
         typeof window !== "undefined"
-            ? (window as unknown as { TimePadBridge?: NativeBridge })
-                  .TimePadBridge
+            ? (window as unknown as {
+                  TimePadBridge?: NativeBridge;
+                  timePadSaveConfig?: SaveConfigFn;
+              })
             : undefined;
+    const bridge = win?.TimePadBridge;
     return {
         isNative: !!bridge,
         deviceKey: bridge?.getDeviceKey() ?? null,
@@ -16,5 +25,12 @@ export function useNativeBridge() {
             | "android"
             | "windows"
             | "web",
+        saveConfig: (
+            accessToken: string,
+            refreshToken: string,
+            deviceKey: string,
+        ) => {
+            win?.timePadSaveConfig?.(accessToken, refreshToken, deviceKey);
+        },
     };
 }
