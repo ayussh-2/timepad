@@ -1,5 +1,5 @@
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from "recharts";
-import { formatDuration } from "~/app/components/ui/duration";
+import { formatDuration } from "~/components/ui/duration";
 import type { DeviceUsage } from "~/app/types";
 
 interface DeviceBreakdownCardProps {

@@ -3,8 +3,8 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import { Copy, Monitor, Plus, Smartphone, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { devicesApi } from "~/app/api/devices";
-import { EmptyState } from "~/app/components/ui/empty-state";
-import { useNativeBridge } from "~/app/hooks/use-native-bridge";
+import { EmptyState } from "~/components/ui/empty-state";
+import { useNativeBridge } from "~/hooks/use-native-bridge";
 import type { Device } from "~/app/types";
 import {
     AlertDialog,

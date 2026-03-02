@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { TagInput } from "~/app/components/ui/tag-input";
-import { useAuthStore } from "~/app/store/auth.store";
-import { useSettingsStore } from "~/app/store/settings.store";
+import { TagInput } from "~/components/ui/tag-input";
+import { useAuthStore } from "~/store/auth.store";
+import { useSettingsStore } from "~/store/settings.store";
 import {
     AlertDialog,
     AlertDialogAction,

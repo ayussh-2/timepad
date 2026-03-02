@@ -1,5 +1,6 @@
+import { AppIcon } from "~/components/ui/app-icon";
 import { Badge } from "~/components/ui/badge";
-import { formatDuration } from "~/app/components/ui/duration";
+import { formatDuration } from "~/components/ui/duration";
 import type { AppUsage } from "~/app/types";
 
 interface TopAppsCardProps {
@@ -16,9 +17,12 @@ export function TopAppsCard({ apps }: TopAppsCardProps) {
             {apps.slice(0, 8).map((app) => (
                 <div key={app.app_name} className="space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm text-ink truncate">
-                            {app.app_name}
-                        </span>
+                        <div className="flex items-center gap-2 min-w-0">
+                            <AppIcon appName={app.app_name} size="sm" />
+                            <span className="text-sm text-ink truncate">
+                                {app.app_name}
+                            </span>
+                        </div>
                         <div className="flex items-center gap-2 shrink-0">
                             {app.category && (
                                 <Badge

@@ -1,8 +1,8 @@
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { useReports } from "~/app/hooks/use-reports";
-import { EmptyState } from "~/app/components/ui/empty-state";
-import { formatDuration, Duration } from "~/app/components/ui/duration";
+import { useReports } from "~/hooks/use-reports";
+import { EmptyState } from "~/components/ui/empty-state";
+import { formatDuration, Duration } from "~/components/ui/duration";
 import {
     Bar,
     BarChart,

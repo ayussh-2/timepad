@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { devicesApi } from "~/app/api/devices";
-import { DateNavigator } from "~/app/components/ui/date-navigator";
-import { EmptyState } from "~/app/components/ui/empty-state";
-import { EventDetailDrawer } from "~/app/components/timeline/event-detail-drawer";
-import { TimelineCanvas } from "~/app/components/timeline/timeline-canvas";
-import { useTimeline } from "~/app/hooks/use-timeline";
-import { useActivityStore } from "~/app/store/activity.store";
+import { DateNavigator } from "~/components/ui/date-navigator";
+import { EmptyState } from "~/components/ui/empty-state";
+import { EventDetailDrawer } from "~/components/timeline/event-detail-drawer";
+import { TimelineCanvas } from "~/components/timeline/timeline-canvas";
+import { useTimeline } from "~/hooks/use-timeline";
+import { useActivityStore } from "~/store/activity.store";
 import type { TimelineEntry } from "~/app/types";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";

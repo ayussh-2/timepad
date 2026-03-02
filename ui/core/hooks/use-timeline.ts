@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useActivityStore } from "~/app/store/activity.store";
+import { useActivityStore } from "~/store/activity.store";
 
 export function useTimeline(date: string) {
     const timeline = useActivityStore((s) => s.timeline);

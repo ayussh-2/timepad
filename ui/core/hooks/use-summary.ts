@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useActivityStore } from "~/app/store/activity.store";
+import { useActivityStore } from "~/store/activity.store";
 
 export function useSummary(date: string) {
     const dailySummary = useActivityStore((s) => s.dailySummary);

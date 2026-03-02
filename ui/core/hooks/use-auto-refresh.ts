@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useActivityStore } from "~/app/store/activity.store";
+import { useActivityStore } from "~/store/activity.store";
 
 const INTERVAL_MS = 30 * 60 * 1000;
 

@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { useState } from "react";
-import { formatDuration } from "~/app/components/ui/duration";
+import { AppIcon } from "~/components/ui/app-icon";
+import { formatDuration } from "~/components/ui/duration";
 import type { TimelineEntry } from "~/app/types";
 import {
     Tooltip,
@@ -137,7 +138,14 @@ function EventBar({
                 />
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-52">
-                <p className="font-medium">{event.app_name}</p>
+                <div className="flex items-center gap-2 mb-1">
+                    <AppIcon
+                        appName={event.app_name}
+                        url={event.url}
+                        size="sm"
+                    />
+                    <p className="font-medium">{event.app_name}</p>
+                </div>
                 {event.window_title && (
                     <p className="text-xs text-secondary-text truncate">
                         {event.window_title}

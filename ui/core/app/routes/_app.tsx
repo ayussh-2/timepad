@@ -1,10 +1,10 @@
 import { useEffect } from "react";
 import { Outlet, redirect, useNavigate } from "react-router";
-import { MobileNav } from "~/app/components/layout/mobile-nav";
-import { Sidebar } from "~/app/components/layout/sidebar";
-import { Topbar } from "~/app/components/layout/topbar";
-import { useAutoRefresh } from "~/app/hooks/use-auto-refresh";
-import { useAuthStore } from "~/app/store/auth.store";
+import { MobileNav } from "~/components/layout/mobile-nav";
+import { Sidebar } from "~/components/layout/sidebar";
+import { Topbar } from "~/components/layout/topbar";
+import { useAutoRefresh } from "~/hooks/use-auto-refresh";
+import { useAuthStore } from "~/store/auth.store";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
 export function clientLoader() {

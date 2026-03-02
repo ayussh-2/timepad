@@ -2,8 +2,8 @@ import dayjs from "dayjs";
 import { useState } from "react";
 import { eventsApi } from "~/app/api/events";
 import { categoriesApi } from "~/app/api/categories";
-import { formatDuration } from "~/app/components/ui/duration";
-import { useActivityStore } from "~/app/store/activity.store";
+import { formatDuration } from "~/components/ui/duration";
+import { useActivityStore } from "~/store/activity.store";
 import type { Category, TimelineEntry } from "~/app/types";
 import {
     AlertDialog,

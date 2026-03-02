@@ -1,6 +1,6 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
 import type { DailySummary } from "~/app/types";
-import { formatDuration } from "~/app/components/ui/duration";
+import { formatDuration } from "~/components/ui/duration";
 
 const PRODUCTIVE_COLOR = "#7a9a6d";
 const DISTRACTION_COLOR = "#c4a77d";

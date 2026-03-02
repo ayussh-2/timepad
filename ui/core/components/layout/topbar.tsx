@@ -9,7 +9,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
-import { useAuthStore } from "~/app/store/auth.store";
+import { useAuthStore } from "~/store/auth.store";
 
 export function Topbar() {
     const user = useAuthStore((s) => s.user);

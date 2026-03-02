@@ -1,7 +1,7 @@
 import { Plus, Trash2, Pencil } from "lucide-react";
 import { useEffect, useState } from "react";
 import { categoriesApi } from "~/app/api/categories";
-import { EmptyState } from "~/app/components/ui/empty-state";
+import { EmptyState } from "~/components/ui/empty-state";
 import type { Category, CategoryRule } from "~/app/types";
 import {
     AlertDialog,
