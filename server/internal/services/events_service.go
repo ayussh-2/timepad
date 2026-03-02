@@ -240,8 +240,8 @@ type TimelinePage struct {
 }
 
 // GetTimeline returns up to limit events for the given date, starting after cursor.
-// Pass an empty cursor to retrieve the first page.
-func (s *EventsService) GetTimeline(userID, date, cursor string, limit int) (*TimelinePage, error) {
+// Pass an empty cursor to retrieve the first page. Pass a non-empty appName to filter by app.
+func (s *EventsService) GetTimeline(userID, date, cursor, appName string, limit int) (*TimelinePage, error) {
 	loc := s.userLocation(userID)
 	parsedDate, err := time.ParseInLocation("2006-01-02", date, loc)
 	if err != nil {
@@ -261,6 +261,11 @@ func (s *EventsService) GetTimeline(userID, date, cursor string, limit int) (*Ti
 		if cursorTime, cerr := decodeCursor(cursor); cerr == nil {
 			query = query.Where("start_time > ?", cursorTime)
 		}
+	}
+
+	// Optional app name filter.
+	if appName != "" {
+		query = query.Where("app_name = ?", appName)
 	}
 
 	// Fetch one extra record to detect whether a next page exists.
@@ -342,6 +347,138 @@ func (s *EventsService) DeleteEvent(userID string, eventID string) error {
 		return utils.NewNotFoundError("event not found or unauthorized")
 	}
 	return nil
+}
+
+// ClassifyAppProductivity is the high-level "mark this whole app as productive /
+// distraction / neutral" action. It finds-or-creates an appropriate default
+// user category and bulk-applies it to every event for appName.
+// Pass isProductive = nil to clear all categorisation (neutral / unclassified).
+func (s *EventsService) ClassifyAppProductivity(userID, appName string, isProductive *bool) (*models.Category, error) {
+	// Neutral / clear path
+	if isProductive == nil {
+		result := s.db.Model(&models.ActivityEvent{}).
+			Where("user_id = ? AND app_name = ?", userID, appName).
+			Update("category_id", nil)
+		if result.Error != nil {
+			return nil, errors.New("failed to clear app classification")
+		}
+		return nil, nil
+	}
+
+	parsedUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, errors.New("invalid user ID")
+	}
+
+	// Look for an existing user category with the same productivity level.
+	// Prefer one that already has an app_name rule for this app.
+	var candidates []models.Category
+	s.db.Where("user_id = ? AND is_productive = ?", parsedUID, *isProductive).Find(&candidates)
+
+	var cat *models.Category
+	for i := range candidates {
+		var rules []categoryRule
+		if json.Unmarshal(candidates[i].Rules, &rules) == nil {
+			for _, r := range rules {
+				if r.Type == "app_name" && r.Op == "equals" && strings.EqualFold(r.Value, appName) {
+					cat = &candidates[i]
+					break
+				}
+			}
+		}
+		if cat != nil {
+			break
+		}
+	}
+	// Fall back to first candidate
+	if cat == nil && len(candidates) > 0 {
+		cat = &candidates[0]
+	}
+
+	// If no suitable category exists, create a simple default one.
+	if cat == nil {
+		name := "Productive"
+		color := "#7a9a6d"
+		if !*isProductive {
+			name = "Distraction"
+			color = "#c4a77d"
+		}
+		newCat := models.Category{
+			UserID:       &parsedUID,
+			Name:         name,
+			Color:        color,
+			IsSystem:     false,
+			IsProductive: isProductive,
+		}
+		if err := s.db.Create(&newCat).Error; err != nil {
+			return nil, errors.New("failed to create default category")
+		}
+		cat = &newCat
+	}
+
+	s.ensureAppNameRule(cat, appName)
+
+	if err := s.db.Model(&models.ActivityEvent{}).
+		Where("user_id = ? AND app_name = ?", userID, appName).
+		Update("category_id", cat.ID).Error; err != nil {
+		return nil, errors.New("failed to classify app events")
+	}
+	return cat, nil
+}
+
+// BulkCategorizeApp sets category_id on every event the user has for the given
+// appName (all-time, not scoped to a single day).  Pass an empty categoryID to
+// clear the category.  When a category is set, it also adds an
+// `app_name = equals` rule to the category so future ingest events are
+// auto-categorized without any extra work.
+func (s *EventsService) BulkCategorizeApp(userID, appName, categoryID string) (int64, error) {
+	updates := map[string]interface{}{}
+
+	if categoryID == "" {
+		updates["category_id"] = nil
+	} else {
+		catID, err := uuid.Parse(categoryID)
+		if err != nil {
+			return 0, errors.New("invalid category ID")
+		}
+		// Ensure the category belongs to this user (or is a system category).
+		var cat models.Category
+		if err := s.db.Where("id = ? AND (user_id = ? OR is_system = true)", catID, userID).First(&cat).Error; err != nil {
+			return 0, utils.NewNotFoundError("category not found")
+		}
+		updates["category_id"] = catID
+
+		// Append an app_name rule to the category so future events are auto-categorized.
+		s.ensureAppNameRule(&cat, appName)
+	}
+
+	result := s.db.Model(&models.ActivityEvent{}).
+		Where("user_id = ? AND app_name = ?", userID, appName).
+		Updates(updates)
+	if result.Error != nil {
+		return 0, errors.New("failed to bulk update events")
+	}
+	return result.RowsAffected, nil
+}
+
+// ensureAppNameRule adds an {type:"app_name", op:"equals", value:appName} rule
+// to the category if one doesn't already exist.
+func (s *EventsService) ensureAppNameRule(cat *models.Category, appName string) {
+	var rules []categoryRule
+	if err := json.Unmarshal(cat.Rules, &rules); err != nil {
+		rules = []categoryRule{}
+	}
+
+	for _, r := range rules {
+		if r.Type == "app_name" && r.Op == "equals" && strings.EqualFold(r.Value, appName) {
+			return // rule already exists
+		}
+	}
+
+	rules = append(rules, categoryRule{Type: "app_name", Op: "equals", Value: appName})
+	if data, err := json.Marshal(rules); err == nil {
+		s.db.Model(cat).Update("rules", data)
+	}
 }
 
 // userLocation loads the user's IANA timezone from the DB.

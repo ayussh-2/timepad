@@ -149,7 +149,7 @@ function CategoryFormSheet({
         <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
             <SheetContent
                 side="right"
-                className="w-full sm:max-w-md overflow-y-auto"
+                className="w-full sm:max-w-md overflow-y-auto px-5"
             >
                 <SheetHeader>
                     <SheetTitle>

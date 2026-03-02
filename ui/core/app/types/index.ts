@@ -73,6 +73,7 @@ export interface AppUsage {
     app_name: string;
     total_secs: number;
     category?: Category | null;
+    platforms?: string[];
 }
 
 export interface DeviceUsage {

@@ -139,3 +139,100 @@ export function getAppInitials(appName: string): string {
     if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
     return (words[0][0] + words[1][0]).toUpperCase();
 }
+
+/**
+ * Infers the originating platform from backend-provided platforms array
+ * or, as a fallback, from the app name pattern.
+ *
+ * Returns the single platform string when unambiguous, or null when mixed /
+ * unknown.
+ */
+export function detectPlatform(
+    appName: string,
+    platforms?: string[],
+): "windows" | "android" | "browser" | null {
+    // Prefer authoritative data from the backend
+    if (platforms && platforms.length === 1) {
+        const p = platforms[0];
+        if (p === "windows" || p === "android" || p === "browser") return p;
+    }
+
+    // Android package name pattern: com.something.app  (≥ 2 dots)
+    if (/^[a-z][a-z0-9_]*(\.[a-z0-9_]+){2,}$/i.test(appName)) {
+        return "android";
+    }
+
+    // Known browser executable names
+    const lower = appName.toLowerCase().trim();
+    const browserNames = [
+        "chrome",
+        "firefox",
+        "safari",
+        "msedge",
+        "edge",
+        "opera",
+        "brave",
+        "arc",
+        "vivaldi",
+        "chromium",
+    ];
+    if (browserNames.some((b) => lower === b || lower.startsWith(b + " "))) {
+        return "browser";
+    }
+
+    return null;
+}
+
+/**
+ * Common Windows system-process names that should be hidden from the
+ * "Top Apps" list because they produce noise without meaningful data.
+ */
+const WINDOWS_SYSTEM_APPS = new Set([
+    "ShellHost",
+    "Taskmgr",
+    "conhost",
+    "dwm",
+    "winlogon",
+    "csrss",
+    "svchost",
+    "RuntimeBroker",
+    "SearchHost",
+    "StartMenuExperienceHost",
+    "ApplicationFrameHost",
+    "TextInputHost",
+    "ctfmon",
+    "LockApp",
+    "LogonUI",
+    "fontdrvhost",
+    "WmiPrvSE",
+    "spoolsv",
+    "lsass",
+    "services",
+    "Registry",
+    "MemCompression",
+    "MsMpEng",
+    "SecurityHealthSystray",
+    "SecurityHealthService",
+    "backgroundTaskHost",
+    "dllhost",
+    "SgrmBroker",
+    "NisSrv",
+    "smartscreen",
+    "UserOOBEBroker",
+    "SystemSettings",
+    "PhoneExperienceHost",
+    "WidgetService",
+    "Widgets",
+    "sihost",
+    "taskhostw",
+    "wininit",
+    "explorer",
+]);
+
+/** Returns true if the app should be considered a system/noise process. */
+export function isSystemApp(appName: string): boolean {
+    if (WINDOWS_SYSTEM_APPS.has(appName)) return true;
+    // PowerToys utilities: PowerToys.PowerLauncher, PowerToys.FancyZones, …
+    if (appName.startsWith("PowerToys.")) return true;
+    return false;
+}

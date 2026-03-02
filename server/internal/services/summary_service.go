@@ -22,6 +22,7 @@ type AppUsage struct {
 	AppName   string           `json:"app_name"`
 	Category  *models.Category `json:"category,omitempty"`
 	TotalSecs int              `json:"total_secs"`
+	Platforms []string         `json:"platforms,omitempty"`
 }
 
 type DeviceUsage struct {
@@ -68,6 +69,7 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 
 	appUsageMap := make(map[string]int)
 	appCategoryMap := make(map[string]*models.Category)
+	appPlatformMap := make(map[string]map[string]bool)
 	deviceUsageMap := make(map[string]int)
 	deviceDetailsMap := make(map[string]models.Device)
 
@@ -93,6 +95,10 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 		if e.CategoryID != nil {
 			appCategoryMap[e.AppName] = &e.Category
 		}
+		if appPlatformMap[e.AppName] == nil {
+			appPlatformMap[e.AppName] = make(map[string]bool)
+		}
+		appPlatformMap[e.AppName][e.Device.Platform] = true
 
 		deviceUsageMap[e.Device.ID.String()] += e.DurationSecs
 		deviceDetailsMap[e.Device.ID.String()] = e.Device
@@ -102,10 +108,15 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 	}
 
 	for app, secs := range appUsageMap {
+		var platforms []string
+		for p := range appPlatformMap[app] {
+			platforms = append(platforms, p)
+		}
 		summary.TopApps = append(summary.TopApps, AppUsage{
 			AppName:   app,
 			TotalSecs: secs,
 			Category:  appCategoryMap[app],
+			Platforms: platforms,
 		})
 	}
 
@@ -184,6 +195,7 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 
 	appUsageMap := make(map[string]int)
 	appCategoryMap := make(map[string]*models.Category)
+	weeklyAppPlatformMap := make(map[string]map[string]bool)
 
 	// Map to hold daily usages [dayIndex] -> maps
 	dailyAppUsageMaps := make([]map[string]int, 7)
@@ -227,6 +239,10 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 		if e.CategoryID != nil {
 			appCategoryMap[e.AppName] = &e.Category
 		}
+		if weeklyAppPlatformMap[e.AppName] == nil {
+			weeklyAppPlatformMap[e.AppName] = make(map[string]bool)
+		}
+		weeklyAppPlatformMap[e.AppName][e.Device.Platform] = true
 
 		// Daily Aggregations
 		dailyAppUsageMaps[dayIndex][e.AppName] += e.DurationSecs
@@ -236,10 +252,15 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 	}
 
 	for app, secs := range appUsageMap {
+		var wplatforms []string
+		for p := range weeklyAppPlatformMap[app] {
+			wplatforms = append(wplatforms, p)
+		}
 		summary.TopApps = append(summary.TopApps, AppUsage{
 			AppName:   app,
 			TotalSecs: secs,
 			Category:  appCategoryMap[app],
+			Platforms: wplatforms,
 		})
 	}
 

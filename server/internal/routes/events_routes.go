@@ -10,6 +10,8 @@ func RegisterEventsRoutes(rg *gin.RouterGroup, eventsController *controllers.Eve
 	{
 		eventsGroup.POST("", eventsController.IngestEvents)
 		eventsGroup.GET("", eventsController.GetEvents)
+		eventsGroup.PATCH("/classify-app", eventsController.ClassifyApp)
+		eventsGroup.PATCH("/categorize-app", eventsController.BulkCategorizeEvents)
 		eventsGroup.PATCH("/:id", eventsController.EditEvent)
 		eventsGroup.DELETE("/:id", eventsController.DeleteEvent)
 	}

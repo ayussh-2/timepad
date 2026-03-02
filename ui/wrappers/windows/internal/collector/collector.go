@@ -21,6 +21,62 @@ const (
 	defaultIdleThreshold = 5 * time.Minute
 )
 
+// windowsSystemApps is the set of Windows system process names that should
+// not be tracked — they produce noise without meaningful activity data.
+var windowsSystemApps = map[string]bool{
+	"ShellHost":               true,
+	"Taskmgr":                 true,
+	"conhost":                 true,
+	"dwm":                     true,
+	"winlogon":                true,
+	"csrss":                   true,
+	"svchost":                 true,
+	"RuntimeBroker":           true,
+	"SearchHost":              true,
+	"StartMenuExperienceHost": true,
+	"ApplicationFrameHost":    true,
+	"TextInputHost":           true,
+	"ctfmon":                  true,
+	"LockApp":                 true,
+	"LogonUI":                 true,
+	"fontdrvhost":             true,
+	"WmiPrvSE":                true,
+	"spoolsv":                 true,
+	"lsass":                   true,
+	"services":                true,
+	"Registry":                true,
+	"MemCompression":          true,
+	"MsMpEng":                 true,
+	"SecurityHealthSystray":   true,
+	"SecurityHealthService":   true,
+	"backgroundTaskHost":      true,
+	"dllhost":                 true,
+	"SgrmBroker":              true,
+	"NisSrv":                  true,
+	"smartscreen":             true,
+	"UserOOBEBroker":          true,
+	"SystemSettings":          true,
+	"PhoneExperienceHost":     true,
+	"WidgetService":           true,
+	"Widgets":                 true,
+	"sihost":                  true,
+	"taskhostw":               true,
+	"wininit":                 true,
+	"explorer":                true,
+}
+
+// isSystemApp reports whether the given exe name should be filtered out.
+func isSystemApp(name string) bool {
+	if windowsSystemApps[name] {
+		return true
+	}
+	// All PowerToys utility windows (e.g. PowerToys.PowerLauncher, PowerToys.FancyZones)
+	if strings.HasPrefix(name, "PowerToys.") {
+		return true
+	}
+	return false
+}
+
 var (
 	modUser32   = windows.NewLazySystemDLL("user32.dll")
 	modKernel32 = windows.NewLazySystemDLL("kernel32.dll")
@@ -161,6 +217,12 @@ func Run(ctx context.Context, cfg *config.Config) {
 		now := time.Now()
 		win := snapshotForeground()
 		idle := getIdleDuration() > defaultIdleThreshold
+
+		// Skip system processes — they add noise without meaningful data.
+		if isSystemApp(win.exeName) {
+			return
+		}
+
 		if cur == nil {
 			log.Printf("collector: first window [%s] %q", win.exeName, win.title)
 			cur = &session{window: win, startTime: now}

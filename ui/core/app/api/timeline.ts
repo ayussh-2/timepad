@@ -41,10 +41,20 @@ function normalizeEvent(e: RawEvent): TimelineEntry {
 }
 
 export const timelineApi = {
-    get: (date: string, cursor?: string | null, limit = 100) =>
+    get: (
+        date: string,
+        cursor?: string | null,
+        limit = 100,
+        appName?: string,
+    ) =>
         client
             .get<ApiEnvelope<RawTimelineResponse>>("/timeline", {
-                params: { date, ...(cursor ? { cursor } : {}), limit },
+                params: {
+                    date,
+                    ...(cursor ? { cursor } : {}),
+                    limit,
+                    ...(appName ? { app_name: appName } : {}),
+                },
             })
             .then(
                 (r) =>

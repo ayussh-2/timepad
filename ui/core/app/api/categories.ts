@@ -1,7 +1,7 @@
 import type { ApiEnvelope, Category, CategoryRule } from "~/app/types";
 import { client } from "./client";
 
-interface RawCategory {
+export interface RawCategory {
     ID: string;
     UserID: string | null;
     Name: string;
@@ -12,7 +12,7 @@ interface RawCategory {
     Rules: CategoryRule[] | null;
 }
 
-function normalizeCategory(c: RawCategory): Category {
+export function normalizeCategory(c: RawCategory): Category {
     return {
         id: c.ID,
         user_id: c.UserID,

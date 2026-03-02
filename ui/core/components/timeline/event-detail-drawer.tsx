@@ -16,7 +16,6 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
-import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import {
@@ -86,7 +85,7 @@ export function EventDetailDrawer({ event, onClose }: EventDetailDrawerProps) {
 
     return (
         <Sheet open={!!event} onOpenChange={(open) => !open && onClose()}>
-            <SheetContent side="right" className="w-full sm:max-w-md">
+            <SheetContent side="right" className="w-full sm:max-w-md px-5">
                 <SheetHeader>
                     <SheetTitle className="text-left text-ink">
                         {event.app_name}

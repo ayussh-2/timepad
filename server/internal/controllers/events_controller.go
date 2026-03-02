@@ -98,6 +98,7 @@ func (ec *EventsController) GetTimeline(c *gin.Context) {
 	}
 
 	cursor := c.Query("cursor")
+	appName := c.Query("app_name")
 	limit := 100
 	if l, err := strconv.Atoi(c.DefaultQuery("limit", "100")); err == nil && l > 0 {
 		if l > 500 {
@@ -106,7 +107,7 @@ func (ec *EventsController) GetTimeline(c *gin.Context) {
 		limit = l
 	}
 
-	page, err := ec.service.GetTimeline(userID.(string), date, cursor, limit)
+	page, err := ec.service.GetTimeline(userID.(string), date, cursor, appName, limit)
 	if err != nil {
 		utils.HandleError(c, "Failed to fetch timeline", err)
 		return
@@ -155,4 +156,63 @@ func (ec *EventsController) DeleteEvent(c *gin.Context) {
 	}
 
 	utils.OK(c, "Event deleted successfully", nil)
+}
+
+type ClassifyAppPayload struct {
+	AppName      string `json:"app_name" binding:"required"`
+	IsProductive *bool  `json:"is_productive"` // null = clear / neutral
+}
+
+func (ec *EventsController) ClassifyApp(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "User ID not found in context")
+		return
+	}
+
+	var req ClassifyAppPayload
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validation failed", err.Error())
+		return
+	}
+
+	cat, err := ec.service.ClassifyAppProductivity(userID.(string), req.AppName, req.IsProductive)
+	if err != nil {
+		utils.HandleError(c, "Failed to classify app", err)
+		return
+	}
+
+	utils.OK(c, "App classified", gin.H{"category": cat})
+}
+
+type BulkCategorizePayload struct {
+	AppName    string  `json:"app_name" binding:"required"`
+	CategoryID *string `json:"category_id"` // null to clear
+}
+
+func (ec *EventsController) BulkCategorizeEvents(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "User ID not found in context")
+		return
+	}
+
+	var req BulkCategorizePayload
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validation failed", err.Error())
+		return
+	}
+
+	catID := ""
+	if req.CategoryID != nil {
+		catID = *req.CategoryID
+	}
+
+	count, err := ec.service.BulkCategorizeApp(userID.(string), req.AppName, catID)
+	if err != nil {
+		utils.HandleError(c, "Failed to categorize app events", err)
+		return
+	}
+
+	utils.OK(c, "App events categorized", gin.H{"updated": count})
 }
