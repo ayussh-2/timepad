@@ -6,7 +6,7 @@ const TABS = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/timeline", label: "Timeline", icon: Clock },
     { to: "/reports", label: "Reports", icon: BarChart2 },
-    { to: "/settings", label: "Settings", icon: Settings },
+    { to: "/devices", label: "Devices", icon: Settings },
 ];
 
 export function MobileNav() {

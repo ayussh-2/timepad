@@ -1,0 +1,10 @@
+# Timepad Android Wrapper — build-time environment
+# Copy this file to local.properties (in the same directory) and fill in your values.
+# local.properties is gitignored by default in Android projects.
+
+# URL of the backend API server
+# Use 10.0.2.2 to reach your host machine from an Android emulator.
+TIMEPAD_SERVER_URL=http://10.0.2.2:8080/api/v1
+
+# URL of the dashboard UI
+TIMEPAD_DASHBOARD_URL=http://10.0.2.2:5173
