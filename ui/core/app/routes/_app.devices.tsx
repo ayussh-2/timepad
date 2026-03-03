@@ -115,7 +115,7 @@ function RegisterDeviceSheet({
                     <SheetTitle>Register device</SheetTitle>
                 </SheetHeader>
 
-                <div className="mt-6 space-y-5">
+                <div className="mt-6 space-y-5 px-5">
                     {bridge.isNative && (
                         <div className="rounded-lg bg-accent/10 border border-accent/20 px-3 py-2 text-sm text-accent">
                             Running on {bridge.platform} — device key

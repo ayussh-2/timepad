@@ -1,10 +1,9 @@
 import dayjs from "dayjs";
 import { useState } from "react";
 import { eventsApi } from "~/app/api/events";
-import { categoriesApi } from "~/app/api/categories";
 import { formatDuration } from "~/components/ui/duration";
 import { useActivityStore } from "~/store/activity.store";
-import type { Category, TimelineEntry } from "~/app/types";
+import type { TimelineEntry } from "~/app/types";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -18,13 +17,6 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "~/components/ui/select";
 import { Separator } from "~/components/ui/separator";
 import {
     Sheet,
@@ -33,7 +25,6 @@ import {
     SheetTitle,
 } from "~/components/ui/sheet";
 import { Toggle } from "~/components/ui/toggle";
-import { useEffect } from "react";
 
 interface EventDetailDrawerProps {
     event: TimelineEntry | null;
@@ -43,29 +34,9 @@ interface EventDetailDrawerProps {
 export function EventDetailDrawer({ event, onClose }: EventDetailDrawerProps) {
     const updateEvent = useActivityStore((s) => s.updateEvent);
     const removeEvent = useActivityStore((s) => s.removeEvent);
-    const [categories, setCategories] = useState<Category[]>([]);
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-        categoriesApi
-            .list()
-            .then(setCategories)
-            .catch(() => {});
-    }, []);
-
     if (!event) return null;
-
-    const handleCategoryChange = async (categoryId: string) => {
-        setSaving(true);
-        try {
-            const val = categoryId === "__none__" ? null : categoryId;
-            await eventsApi.patch(event.id, { category_id: val });
-            const cat = categories.find((c) => c.id === categoryId) ?? null;
-            updateEvent(event.id, { category_id: val, category: cat });
-        } finally {
-            setSaving(false);
-        }
-    };
 
     const handlePrivacyToggle = async () => {
         setSaving(true);
@@ -139,33 +110,27 @@ export function EventDetailDrawer({ event, onClose }: EventDetailDrawerProps) {
 
                     <Separator />
 
+                    {/* Category is set at the app level */}
                     <div className="space-y-1.5">
                         <Label>Category</Label>
-                        <Select
-                            value={event.category_id ?? "__none__"}
-                            onValueChange={handleCategoryChange}
-                            disabled={saving}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Uncategorized" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="__none__">
+                        <div className="flex items-center gap-2 text-sm text-ink">
+                            {event.app?.category ? (
+                                <>
+                                    <span
+                                        className="h-2 w-2 rounded-full shrink-0"
+                                        style={{
+                                            background:
+                                                event.app.category.color,
+                                        }}
+                                    />
+                                    {event.app.category.name}
+                                </>
+                            ) : (
+                                <span className="text-secondary-text">
                                     Uncategorized
-                                </SelectItem>
-                                {categories.map((c) => (
-                                    <SelectItem key={c.id} value={c.id}>
-                                        <span className="flex items-center gap-2">
-                                            <span
-                                                className="h-2 w-2 rounded-full shrink-0"
-                                                style={{ background: c.color }}
-                                            />
-                                            {c.name}
-                                        </span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                </span>
+                            )}
+                        </div>
                     </div>
 
                     <div className="flex items-center justify-between">

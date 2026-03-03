@@ -1,8 +1,11 @@
 import dayjs from "dayjs";
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useReports } from "~/hooks/use-reports";
 import { EmptyState } from "~/components/ui/empty-state";
 import { formatDuration, Duration } from "~/components/ui/duration";
+import { Toggle } from "~/components/ui/toggle";
+import { isSystemApp } from "~/utils/app-icon";
 import {
     Bar,
     BarChart,
@@ -57,9 +60,12 @@ export default function ReportsPage() {
               }))
         : [];
 
+    const [hideSystemApps, setHideSystemApps] = useState(true);
+
     const appData = data
         ? Object.entries(data.app_usage)
               .map(([name, secs]) => ({ name, secs }))
+              .filter((a) => !hideSystemApps || !isSystemApp(a.name))
               .sort((a, b) => b.secs - a.secs)
               .slice(0, 15)
         : [];
@@ -279,9 +285,28 @@ export default function ReportsPage() {
                     {appData.length > 0 && (
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-secondary-text">
-                                    App usage
-                                </CardTitle>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm font-medium text-secondary-text">
+                                        App usage
+                                    </CardTitle>
+                                    <Toggle
+                                        pressed={hideSystemApps}
+                                        onPressedChange={setHideSystemApps}
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-6 gap-1.5 text-xs px-2"
+                                        aria-label="Toggle system apps"
+                                    >
+                                        {hideSystemApps ? (
+                                            <Eye className="h-3 w-3" />
+                                        ) : (
+                                            <EyeOff className="h-3 w-3" />
+                                        )}
+                                        {hideSystemApps
+                                            ? "Show system"
+                                            : "Hide system"}
+                                    </Toggle>
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2">

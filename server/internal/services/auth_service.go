@@ -23,6 +23,7 @@ func NewAuthService(db *gorm.DB, jwtUtil *utils.JWTUtil) *AuthService {
 type RegisterUserResult struct {
 	UserId       string
 	Name         string
+	Email        string
 	RefreshToken string
 	AccessToken  string
 }
@@ -90,6 +91,7 @@ func (s *AuthService) RegisterUser(params RegisterUserParams) (*RegisterUserResu
 	return &RegisterUserResult{
 		UserId:       user.ID.String(),
 		Name:         user.DisplayName,
+		Email:        user.Email,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil
@@ -121,6 +123,7 @@ func (s *AuthService) LoginUser(params LoginUserParams) (*LoginUserResult, error
 	return &LoginUserResult{
 		UserId:       user.ID.String(),
 		Name:         user.DisplayName,
+		Email:        user.Email,
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	}, nil

@@ -1,43 +1,16 @@
-import type { ApiEnvelope, TimelineEntry, TimelineResponse } from "~/app/types";
+import type {
+    ApiEnvelope,
+    App,
+    Device,
+    TimelineEntry,
+    TimelineResponse,
+} from "~/app/types";
 import { client } from "./client";
 
-interface RawEvent {
-    ID: string;
-    UserID: string;
-    DeviceID: string;
-    AppName: string;
-    WindowTitle: string;
-    Url: string;
-    CategoryID: string | null;
-    StartTime: string;
-    EndTime: string;
-    DurationSecs: number;
-    IsIdle: boolean;
-    IsPrivate: boolean;
-}
-
+// Server now emits snake_case JSON \u2014 the response shape matches our types directly.
 interface RawTimelineResponse {
-    events: RawEvent[];
+    events: TimelineEntry[];
     next_cursor?: string | null;
-}
-
-function normalizeEvent(e: RawEvent): TimelineEntry {
-    return {
-        id: e.ID,
-        user_id: e.UserID,
-        device_id: e.DeviceID,
-        app_name: e.AppName,
-        window_title: e.WindowTitle,
-        url: e.Url,
-        category_id: e.CategoryID,
-        category: null,
-        device: null,
-        start_time: e.StartTime,
-        end_time: e.EndTime,
-        duration_secs: e.DurationSecs,
-        is_idle: e.IsIdle,
-        is_private: e.IsPrivate,
-    };
 }
 
 export const timelineApi = {
@@ -59,7 +32,7 @@ export const timelineApi = {
             .then(
                 (r) =>
                     ({
-                        events: (r.data.data.events ?? []).map(normalizeEvent),
+                        events: r.data.data.events ?? [],
                         next_cursor: r.data.data.next_cursor ?? null,
                     }) satisfies TimelineResponse,
             ),

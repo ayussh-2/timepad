@@ -12,6 +12,7 @@ import (
 	"github.com/ayussh-2/timepad/internal/models"
 	"github.com/ayussh-2/timepad/internal/utils"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -49,8 +50,7 @@ type IngestEventsParams struct {
 }
 
 type UpdateEventParams struct {
-	CategoryID *string `json:"category_id"`
-	IsPrivate  *bool   `json:"is_private"`
+	IsPrivate *bool `json:"is_private"`
 }
 
 // IngestResult carries the outcome of an ingest call.
@@ -64,6 +64,7 @@ type IngestResult struct {
 type ingestJobPayload struct {
 	DeviceID string                 `json:"device_id"`
 	UserID   string                 `json:"user_id"`
+	Platform string                 `json:"platform"`
 	Events   []models.ActivityEvent `json:"events"`
 }
 
@@ -136,6 +137,7 @@ func (s *EventsService) IngestEvents(params IngestEventsParams) (IngestResult, e
 		payload := ingestJobPayload{
 			DeviceID: device.ID.String(),
 			UserID:   params.UserID,
+			Platform: device.Platform,
 			Events:   events,
 		}
 		if data, merr := json.Marshal(payload); merr == nil {
@@ -148,20 +150,57 @@ func (s *EventsService) IngestEvents(params IngestEventsParams) (IngestResult, e
 	}
 
 	// Sync fallback path (no Redis or Redis unavailable).
-	if err := s.processEvents(device.ID, params.UserID, events); err != nil {
+	if err := s.processEvents(device.ID, params.UserID, device.Platform, events); err != nil {
 		return IngestResult{}, err
 	}
 	return IngestResult{Count: len(events), Queued: false}, nil
 }
 
-// processEvents performs the DB batch-insert, auto-categorization, and LastSeenAt update.
-// Called directly in sync mode and by StartIngestWorker in async mode.
-func (s *EventsService) processEvents(deviceID uuid.UUID, userID string, events []models.ActivityEvent) error {
+// processEvents upserts apps for each unique app_name, resolves AppIDs onto events,
+// batch-inserts events, and updates the device LastSeenAt.
+func (s *EventsService) processEvents(deviceID uuid.UUID, userID, platform string, events []models.ActivityEvent) error {
+	// Collect unique non-idle app names.
+	appNameSet := make(map[string]struct{})
+	for _, e := range events {
+		if !e.IsIdle {
+			appNameSet[e.AppName] = struct{}{}
+		}
+	}
+
+	now := time.Now()
+	appIDMap := make(map[string]uuid.UUID)
+
+	for appName := range appNameSet {
+		// Upsert: create app if new, otherwise extend platforms + update last_seen_at.
+		err := s.db.Exec(`
+			INSERT INTO apps (id, user_id, name, platforms, icon, first_seen_at, last_seen_at)
+			VALUES (gen_random_uuid(), ?, ?, ?, '', ?, ?)
+			ON CONFLICT (user_id, name) DO UPDATE SET
+				platforms    = ARRAY(SELECT DISTINCT unnest(apps.platforms || EXCLUDED.platforms)),
+				last_seen_at = GREATEST(apps.last_seen_at, EXCLUDED.last_seen_at)
+		`, userID, appName, pq.StringArray{platform}, now, now).Error
+		if err != nil {
+			log.Printf("app upsert failed for %q: %v", appName, err)
+			continue
+		}
+
+		var app models.App
+		if err := s.db.Select("id").Where("user_id = ? AND name = ?", userID, appName).First(&app).Error; err != nil {
+			continue
+		}
+		appIDMap[appName] = app.ID
+	}
+
+	// Assign AppID on every event.
+	for i := range events {
+		if id, ok := appIDMap[events[i].AppName]; ok {
+			events[i].AppID = &id
+		}
+	}
+
 	if err := s.db.CreateInBatches(events, 100).Error; err != nil {
 		return errors.New("failed to save events")
 	}
-	s.autoCategorize(userID, events)
-	now := time.Now()
 	s.db.Model(&models.Device{}).Where("id = ?", deviceID).Update("last_seen_at", now)
 	return nil
 }
@@ -210,7 +249,7 @@ func (s *EventsService) StartIngestWorker(ctx context.Context) {
 			continue
 		}
 
-		if err := s.processEvents(devID, payload.UserID, payload.Events); err != nil {
+		if err := s.processEvents(devID, payload.UserID, payload.Platform, payload.Events); err != nil {
 			log.Printf("Ingest worker: failed to process %d events for user %s: %v",
 				len(payload.Events), payload.UserID, err)
 		} else {
@@ -271,7 +310,7 @@ func (s *EventsService) GetTimeline(userID, date, cursor, appName string, limit 
 	// Fetch one extra record to detect whether a next page exists.
 	var events []models.ActivityEvent
 	err = query.
-		Preload("Category").
+		Preload("App.Category").
 		Preload("Device").
 		Order("start_time asc").
 		Limit(limit + 1).
@@ -313,28 +352,11 @@ func (s *EventsService) EditEvent(userID string, eventID string, params UpdateEv
 		return utils.NewNotFoundError("event not found or unauthorized")
 	}
 
-	updates := map[string]interface{}{}
-	if params.CategoryID != nil {
-		if *params.CategoryID == "" {
-			updates["category_id"] = nil
-		} else {
-			catID, err := uuid.Parse(*params.CategoryID)
-			if err != nil {
-				return errors.New("invalid category ID")
-			}
-			updates["category_id"] = catID
-		}
-	}
 	if params.IsPrivate != nil {
-		updates["is_private"] = *params.IsPrivate
-	}
-
-	if len(updates) > 0 {
-		if err := s.db.Model(&event).Updates(updates).Error; err != nil {
+		if err := s.db.Model(&event).Update("is_private", *params.IsPrivate).Error; err != nil {
 			return errors.New("failed to update event")
 		}
 	}
-
 	return nil
 }
 
@@ -349,140 +371,7 @@ func (s *EventsService) DeleteEvent(userID string, eventID string) error {
 	return nil
 }
 
-// ClassifyAppProductivity is the high-level "mark this whole app as productive /
-// distraction / neutral" action. It finds-or-creates an appropriate default
-// user category and bulk-applies it to every event for appName.
-// Pass isProductive = nil to clear all categorisation (neutral / unclassified).
-func (s *EventsService) ClassifyAppProductivity(userID, appName string, isProductive *bool) (*models.Category, error) {
-	// Neutral / clear path
-	if isProductive == nil {
-		result := s.db.Model(&models.ActivityEvent{}).
-			Where("user_id = ? AND app_name = ?", userID, appName).
-			Update("category_id", nil)
-		if result.Error != nil {
-			return nil, errors.New("failed to clear app classification")
-		}
-		return nil, nil
-	}
-
-	parsedUID, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, errors.New("invalid user ID")
-	}
-
-	// Look for an existing user category with the same productivity level.
-	// Prefer one that already has an app_name rule for this app.
-	var candidates []models.Category
-	s.db.Where("user_id = ? AND is_productive = ?", parsedUID, *isProductive).Find(&candidates)
-
-	var cat *models.Category
-	for i := range candidates {
-		var rules []categoryRule
-		if json.Unmarshal(candidates[i].Rules, &rules) == nil {
-			for _, r := range rules {
-				if r.Type == "app_name" && r.Op == "equals" && strings.EqualFold(r.Value, appName) {
-					cat = &candidates[i]
-					break
-				}
-			}
-		}
-		if cat != nil {
-			break
-		}
-	}
-	// Fall back to first candidate
-	if cat == nil && len(candidates) > 0 {
-		cat = &candidates[0]
-	}
-
-	// If no suitable category exists, create a simple default one.
-	if cat == nil {
-		name := "Productive"
-		color := "#7a9a6d"
-		if !*isProductive {
-			name = "Distraction"
-			color = "#c4a77d"
-		}
-		newCat := models.Category{
-			UserID:       &parsedUID,
-			Name:         name,
-			Color:        color,
-			IsSystem:     false,
-			IsProductive: isProductive,
-		}
-		if err := s.db.Create(&newCat).Error; err != nil {
-			return nil, errors.New("failed to create default category")
-		}
-		cat = &newCat
-	}
-
-	s.ensureAppNameRule(cat, appName)
-
-	if err := s.db.Model(&models.ActivityEvent{}).
-		Where("user_id = ? AND app_name = ?", userID, appName).
-		Update("category_id", cat.ID).Error; err != nil {
-		return nil, errors.New("failed to classify app events")
-	}
-	return cat, nil
-}
-
-// BulkCategorizeApp sets category_id on every event the user has for the given
-// appName (all-time, not scoped to a single day).  Pass an empty categoryID to
-// clear the category.  When a category is set, it also adds an
-// `app_name = equals` rule to the category so future ingest events are
-// auto-categorized without any extra work.
-func (s *EventsService) BulkCategorizeApp(userID, appName, categoryID string) (int64, error) {
-	updates := map[string]interface{}{}
-
-	if categoryID == "" {
-		updates["category_id"] = nil
-	} else {
-		catID, err := uuid.Parse(categoryID)
-		if err != nil {
-			return 0, errors.New("invalid category ID")
-		}
-		// Ensure the category belongs to this user (or is a system category).
-		var cat models.Category
-		if err := s.db.Where("id = ? AND (user_id = ? OR is_system = true)", catID, userID).First(&cat).Error; err != nil {
-			return 0, utils.NewNotFoundError("category not found")
-		}
-		updates["category_id"] = catID
-
-		// Append an app_name rule to the category so future events are auto-categorized.
-		s.ensureAppNameRule(&cat, appName)
-	}
-
-	result := s.db.Model(&models.ActivityEvent{}).
-		Where("user_id = ? AND app_name = ?", userID, appName).
-		Updates(updates)
-	if result.Error != nil {
-		return 0, errors.New("failed to bulk update events")
-	}
-	return result.RowsAffected, nil
-}
-
-// ensureAppNameRule adds an {type:"app_name", op:"equals", value:appName} rule
-// to the category if one doesn't already exist.
-func (s *EventsService) ensureAppNameRule(cat *models.Category, appName string) {
-	var rules []categoryRule
-	if err := json.Unmarshal(cat.Rules, &rules); err != nil {
-		rules = []categoryRule{}
-	}
-
-	for _, r := range rules {
-		if r.Type == "app_name" && r.Op == "equals" && strings.EqualFold(r.Value, appName) {
-			return // rule already exists
-		}
-	}
-
-	rules = append(rules, categoryRule{Type: "app_name", Op: "equals", Value: appName})
-	if data, err := json.Marshal(rules); err == nil {
-		s.db.Model(cat).Update("rules", data)
-	}
-}
-
-// userLocation loads the user's IANA timezone from the DB.
-// Falls back to UTC on any error.
+// userLocation loads the user's IANA timezone from the DB, falls back to UTC.
 func (s *EventsService) userLocation(userID string) *time.Location {
 	var user models.User
 	if err := s.db.Select("timezone").Where("id = ?", userID).First(&user).Error; err != nil {
@@ -493,86 +382,4 @@ func (s *EventsService) userLocation(userID string) *time.Location {
 		return time.UTC
 	}
 	return loc
-}
-
-type categoryRule struct {
-	Type  string `json:"type"`
-	Op    string `json:"op"`
-	Value string `json:"value"`
-}
-
-// autoCategorize scans newly inserted events and applies the first matching
-// category rule set to events that have no category assigned yet.
-func (s *EventsService) autoCategorize(userID string, events []models.ActivityEvent) {
-	var categories []models.Category
-	if err := s.db.Where(
-		"(user_id = ? OR is_system = ?) AND rules IS NOT NULL AND rules != 'null' AND rules != '[]'",
-		userID, true,
-	).Find(&categories).Error; err != nil || len(categories) == 0 {
-		return
-	}
-
-	type parsedCategory struct {
-		id    uuid.UUID
-		rules []categoryRule
-	}
-	parsed := make([]parsedCategory, 0, len(categories))
-	for _, cat := range categories {
-		var rules []categoryRule
-		if err := json.Unmarshal([]byte(cat.Rules), &rules); err != nil || len(rules) == 0 {
-			continue
-		}
-		parsed = append(parsed, parsedCategory{id: cat.ID, rules: rules})
-	}
-
-	if len(parsed) == 0 {
-		return
-	}
-
-	for i := range events {
-		if events[i].CategoryID != nil || events[i].ID == uuid.Nil {
-			continue
-		}
-		for _, pc := range parsed {
-			if matchesCategoryRules(events[i], pc.rules) {
-				catID := pc.id
-				events[i].CategoryID = &catID
-				s.db.Model(&models.ActivityEvent{}).Where("id = ?", events[i].ID).Update("category_id", catID)
-				break
-			}
-		}
-	}
-}
-
-// matchesCategoryRules returns true if the event satisfies any rule in the list (OR logic).
-func matchesCategoryRules(event models.ActivityEvent, rules []categoryRule) bool {
-	for _, rule := range rules {
-		var target string
-		switch rule.Type {
-		case "app_name":
-			target = strings.ToLower(event.AppName)
-		case "window_title":
-			target = strings.ToLower(event.WindowTitle)
-		case "url_domain":
-			target = strings.ToLower(event.Url)
-		default:
-			continue
-		}
-		val := strings.ToLower(rule.Value)
-		switch rule.Op {
-		case "contains":
-			if strings.Contains(target, val) {
-				return true
-			}
-		case "equals":
-			if target == val {
-				return true
-			}
-		case "starts_with":
-			if strings.HasPrefix(target, val) {
-				return true
-			}
-		}
-	}
-	return false
 }

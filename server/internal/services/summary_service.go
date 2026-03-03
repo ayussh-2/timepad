@@ -2,9 +2,11 @@ package services
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/ayussh-2/timepad/internal/models"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -19,10 +21,13 @@ func NewSummaryService(db *gorm.DB) *SummaryService {
 }
 
 type AppUsage struct {
+	AppID     string           `json:"app_id"`
 	AppName   string           `json:"app_name"`
 	Category  *models.Category `json:"category,omitempty"`
 	TotalSecs int              `json:"total_secs"`
 	Platforms []string         `json:"platforms,omitempty"`
+	Icon      string           `json:"icon,omitempty"`
+	IsSystem  bool             `json:"is_system"`
 }
 
 type DeviceUsage struct {
@@ -54,7 +59,7 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 
 	var events []models.ActivityEvent
 	err = s.db.Where("user_id = ? AND start_time >= ? AND start_time < ? AND is_private = false", userID, startOfDay, endOfDay).
-		Preload("Category").
+		Preload("App.Category").
 		Preload("Device").
 		Find(&events).Error
 	if err != nil {
@@ -68,7 +73,10 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 	}
 
 	appUsageMap := make(map[string]int)
+	appIDLookup := make(map[string]*uuid.UUID)
 	appCategoryMap := make(map[string]*models.Category)
+	appIconMap := make(map[string]string)
+	appSystemMap := make(map[string]bool)
 	appPlatformMap := make(map[string]map[string]bool)
 	deviceUsageMap := make(map[string]int)
 	deviceDetailsMap := make(map[string]models.Device)
@@ -83,8 +91,8 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 
 		summary.TotalActiveSecs += e.DurationSecs
 
-		if e.CategoryID != nil && e.Category.IsProductive != nil {
-			if *e.Category.IsProductive {
+		if e.AppID != nil && e.App.CategoryID != nil && e.App.Category != nil && e.App.Category.IsProductive != nil {
+			if *e.App.Category.IsProductive {
 				summary.ProductiveSecs += e.DurationSecs
 			} else {
 				summary.DistractionSecs += e.DurationSecs
@@ -92,8 +100,15 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 		}
 
 		appUsageMap[e.AppName] += e.DurationSecs
-		if e.CategoryID != nil {
-			appCategoryMap[e.AppName] = &e.Category
+		if e.AppID != nil {
+			appIDLookup[e.AppName] = e.AppID
+			if e.App.CategoryID != nil {
+				appCategoryMap[e.AppName] = e.App.Category
+				appIconMap[e.AppName] = e.App.Icon
+			}
+			if e.App.IsSystem {
+				appSystemMap[e.AppName] = true
+			}
 		}
 		if appPlatformMap[e.AppName] == nil {
 			appPlatformMap[e.AppName] = make(map[string]bool)
@@ -112,13 +127,24 @@ func (s *SummaryService) GetDailySummary(userID string, date string) (*DailySumm
 		for p := range appPlatformMap[app] {
 			platforms = append(platforms, p)
 		}
+		appID := ""
+		if id := appIDLookup[app]; id != nil {
+			appID = id.String()
+		}
 		summary.TopApps = append(summary.TopApps, AppUsage{
+			AppID:     appID,
 			AppName:   app,
 			TotalSecs: secs,
 			Category:  appCategoryMap[app],
 			Platforms: platforms,
+			Icon:      appIconMap[app],
+			IsSystem:  appSystemMap[app],
 		})
 	}
+
+	sort.Slice(summary.TopApps, func(i, j int) bool {
+		return summary.TopApps[i].TotalSecs > summary.TopApps[j].TotalSecs
+	})
 
 	for devID, secs := range deviceUsageMap {
 		dev := deviceDetailsMap[devID]
@@ -170,7 +196,7 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 
 	var events []models.ActivityEvent
 	err = s.db.Where("user_id = ? AND start_time >= ? AND start_time < ? AND is_private = false", userID, startOfWeek, endOfWeek).
-		Preload("Category").
+		Preload("App.Category").
 		Preload("Device").
 		Find(&events).Error
 	if err != nil {
@@ -194,7 +220,10 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 	}
 
 	appUsageMap := make(map[string]int)
+	weeklyAppIDLookup := make(map[string]*uuid.UUID)
 	appCategoryMap := make(map[string]*models.Category)
+	weeklyAppIconMap := make(map[string]string)
+	weeklyAppSystemMap := make(map[string]bool)
 	weeklyAppPlatformMap := make(map[string]map[string]bool)
 
 	// Map to hold daily usages [dayIndex] -> maps
@@ -224,8 +253,8 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 		summary.TotalActiveSecs += e.DurationSecs
 		summary.DailyBreakdown[dayIndex].TotalActiveSecs += e.DurationSecs
 
-		if e.CategoryID != nil && e.Category.IsProductive != nil {
-			if *e.Category.IsProductive {
+		if e.AppID != nil && e.App.CategoryID != nil && e.App.Category != nil && e.App.Category.IsProductive != nil {
+			if *e.App.Category.IsProductive {
 				summary.ProductiveSecs += e.DurationSecs
 				summary.DailyBreakdown[dayIndex].ProductiveSecs += e.DurationSecs
 			} else {
@@ -236,8 +265,15 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 
 		// Weekly Aggregations
 		appUsageMap[e.AppName] += e.DurationSecs
-		if e.CategoryID != nil {
-			appCategoryMap[e.AppName] = &e.Category
+		if e.AppID != nil {
+			weeklyAppIDLookup[e.AppName] = e.AppID
+			if e.App.CategoryID != nil {
+				appCategoryMap[e.AppName] = e.App.Category
+				weeklyAppIconMap[e.AppName] = e.App.Icon
+			}
+			if e.App.IsSystem {
+				weeklyAppSystemMap[e.AppName] = true
+			}
 		}
 		if weeklyAppPlatformMap[e.AppName] == nil {
 			weeklyAppPlatformMap[e.AppName] = make(map[string]bool)
@@ -256,22 +292,44 @@ func (s *SummaryService) GetWeeklySummary(userID string, date string) (*WeeklySu
 		for p := range weeklyAppPlatformMap[app] {
 			wplatforms = append(wplatforms, p)
 		}
+		weeklyAppID := ""
+		if id := weeklyAppIDLookup[app]; id != nil {
+			weeklyAppID = id.String()
+		}
 		summary.TopApps = append(summary.TopApps, AppUsage{
+			AppID:     weeklyAppID,
 			AppName:   app,
 			TotalSecs: secs,
 			Category:  appCategoryMap[app],
 			Platforms: wplatforms,
+			Icon:      weeklyAppIconMap[app],
+			IsSystem:  weeklyAppSystemMap[app],
 		})
 	}
 
+	sort.Slice(summary.TopApps, func(i, j int) bool {
+		return summary.TopApps[i].TotalSecs > summary.TopApps[j].TotalSecs
+	})
+
 	for i := 0; i < 7; i++ {
 		for app, secs := range dailyAppUsageMaps[i] {
+			dayAppID := ""
+			if id := weeklyAppIDLookup[app]; id != nil {
+				dayAppID = id.String()
+			}
 			summary.DailyBreakdown[i].TopApps = append(summary.DailyBreakdown[i].TopApps, AppUsage{
+				AppID:     dayAppID,
 				AppName:   app,
 				TotalSecs: secs,
 				Category:  appCategoryMap[app],
+				Icon:      weeklyAppIconMap[app],
+				IsSystem:  weeklyAppSystemMap[app],
 			})
 		}
+
+		sort.Slice(summary.DailyBreakdown[i].TopApps, func(a, b int) bool {
+			return summary.DailyBreakdown[i].TopApps[a].TotalSecs > summary.DailyBreakdown[i].TopApps[b].TotalSecs
+		})
 
 		for devID, secs := range dailyDeviceUsageMaps[i] {
 			dev := deviceDetailsMap[devID]

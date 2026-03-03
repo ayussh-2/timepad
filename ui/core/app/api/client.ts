@@ -24,7 +24,10 @@ client.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 });
 
 let refreshing = false;
-let queue: Array<(token: string) => void> = [];
+let queue: Array<{
+    resolve: (token: string) => void;
+    reject: (err: unknown) => void;
+}> = [];
 
 client.interceptors.response.use(
     (res) => res,
@@ -40,11 +43,11 @@ client.interceptors.response.use(
         original._retry = true;
 
         if (refreshing) {
-            return new Promise((resolve) => {
-                queue.push((token) => {
-                    original.headers.Authorization = `Bearer ${token}`;
-                    resolve(client(original));
-                });
+            return new Promise<string>((resolve, reject) => {
+                queue.push({ resolve, reject });
+            }).then((token) => {
+                original.headers.Authorization = `Bearer ${token}`;
+                return client(original);
             });
         }
 
@@ -72,14 +75,22 @@ client.interceptors.response.use(
             stored.state.refreshToken = refreshToken;
             localStorage.setItem("auth-store", JSON.stringify(stored));
 
-            queue.forEach((cb) => cb(accessToken));
+            queue.forEach(({ resolve }) => resolve(accessToken));
             queue = [];
             original.headers.Authorization = `Bearer ${accessToken}`;
             return client(original);
-        } catch {
-            localStorage.removeItem("auth-store");
-            window.location.href = "/login";
-            return Promise.reject(err);
+        } catch (refreshErr: unknown) {
+            queue.forEach(({ reject }) => reject(refreshErr));
+            queue = [];
+            // Only force-logout when the refresh token itself is rejected (truly
+            // expired / revoked). Network errors or 5xx should NOT wipe the
+            // session — the user is still authenticated, just temporarily offline.
+            const status = (refreshErr as any)?.response?.status;
+            if (status === 401) {
+                localStorage.removeItem("auth-store");
+                window.location.href = "/login";
+            }
+            return Promise.reject(refreshErr);
         } finally {
             refreshing = false;
         }

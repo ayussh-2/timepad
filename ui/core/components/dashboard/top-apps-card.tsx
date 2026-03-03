@@ -13,7 +13,6 @@ interface TopAppsCardProps {
     onAppClick: (app: AppUsage) => void;
 }
 
-/** Returns the bar + dot colour for an app based on its category productivity. */
 function productivityColor(app: AppUsage): { bar: string; dot: string } | null {
     if (!app.category) return null;
     if (app.category.is_productive === true)
@@ -29,7 +28,7 @@ export function TopAppsCard({ apps, onAppClick }: TopAppsCardProps) {
     if (apps.length === 0) return null;
 
     const visible = hideSystem
-        ? apps.filter((a) => !isSystemApp(a.app_name))
+        ? apps.filter((a) => !isSystemApp(a.app_name) && !a.is_system)
         : apps;
     const displayed = visible.slice(0, 8);
     const hiddenCount = apps.length - visible.length;
@@ -47,12 +46,12 @@ export function TopAppsCard({ apps, onAppClick }: TopAppsCardProps) {
                     className="h-6 gap-1.5 text-xs px-2"
                     aria-label="Toggle system apps"
                 >
-                    {hideSystem ? (
+                    {!hideSystem ? (
                         <EyeOff className="h-3 w-3" />
                     ) : (
                         <Eye className="h-3 w-3" />
                     )}
-                    {hideSystem ? "System hidden" : "Show all"}
+                    {!hideSystem ? "Hide system" : "Show all"}
                 </Toggle>
             </div>
 
@@ -79,7 +78,7 @@ export function TopAppsCard({ apps, onAppClick }: TopAppsCardProps) {
                                         <div className="relative shrink-0">
                                             <AppIcon
                                                 appName={app.app_name}
-                                                size="sm"
+                                                size="lg"
                                             />
                                             {platform && (
                                                 <span className="absolute -bottom-1 -right-1">
@@ -103,6 +102,11 @@ export function TopAppsCard({ apps, onAppClick }: TopAppsCardProps) {
                                             <span className="text-sm text-ink truncate group-hover:text-accent transition-colors">
                                                 {app.app_name}
                                             </span>
+                                            {app.is_system && (
+                                                <span className="shrink-0 text-[10px] px-1 py-0.5 rounded bg-amber-400/10 text-amber-600 border border-amber-400/30 leading-none">
+                                                    system
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <span className="text-xs text-secondary-text tabular-nums w-12 text-right shrink-0">

@@ -1,3 +1,4 @@
+import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { devicesApi } from "~/app/api/devices";
 import { DateNavigator } from "~/components/ui/date-navigator";
@@ -10,6 +11,7 @@ import type { TimelineEntry } from "~/app/types";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Toggle } from "~/components/ui/toggle";
+import { isSystemApp } from "~/utils/app-icon";
 
 export default function TimelinePage() {
     const selectedDate = useActivityStore((s) => s.selectedDate);
@@ -22,6 +24,7 @@ export default function TimelinePage() {
         new Set(),
     );
     const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+    const [hideSystem, setHideSystem] = useState(true);
 
     useEffect(() => {
         devicesApi
@@ -48,6 +51,10 @@ export default function TimelinePage() {
         });
     };
 
+    const visibleTimeline = hideSystem
+        ? timeline.filter((e) => !isSystemApp(e.app_name) && !e.app?.is_system)
+        : timeline;
+
     return (
         <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
             <div className="flex flex-wrap items-center gap-3">
@@ -69,6 +76,22 @@ export default function TimelinePage() {
                         ))}
                     </div>
                 )}
+
+                <Toggle
+                    pressed={hideSystem}
+                    onPressedChange={setHideSystem}
+                    size="sm"
+                    variant="outline"
+                    className="h-7 gap-1.5 text-xs px-2 ml-auto"
+                    aria-label="Toggle system apps"
+                >
+                    {hideSystem ? (
+                        <Eye className="h-3 w-3" />
+                    ) : (
+                        <EyeOff className="h-3 w-3" />
+                    )}
+                    {hideSystem ? "Show system" : "Hide system"}
+                </Toggle>
             </div>
 
             {isLoading && timeline.length === 0 ? (
@@ -85,7 +108,7 @@ export default function TimelinePage() {
             ) : (
                 <>
                     <TimelineCanvas
-                        events={timeline}
+                        events={visibleTimeline}
                         deviceIds={filteredDeviceIds}
                         onEventClick={setActiveEvent}
                         date={selectedDate}

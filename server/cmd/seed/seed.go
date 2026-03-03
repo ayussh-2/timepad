@@ -47,12 +47,32 @@ func main() {
 	// 3. Create Categories
 	codeCatID := uuid.New()
 	browseCatID := uuid.New()
+	isProductiveTrue := true
+	isProductiveFalse := false
 	db.Create([]models.Category{
-		{ID: codeCatID, UserID: &userID, Name: "Coding", Color: "#4CAF50"},
-		{ID: browseCatID, UserID: &userID, Name: "Browsing", Color: "#2196F3"},
+		{ID: codeCatID, UserID: &userID, Name: "Coding", Color: "#4CAF50", IsProductive: &isProductiveTrue},
+		{ID: browseCatID, UserID: &userID, Name: "Browsing", Color: "#2196F3", IsProductive: &isProductiveFalse},
 	})
 
-	// 4. Seed Random Events spanning the last 7 days
+	// 4. Create Apps (upsert-style; associate category at app level)
+	vsCodeAppID := uuid.New()
+	chromeAppID := uuid.New()
+	db.Create([]models.App{
+		{
+			ID: vsCodeAppID, UserID: userID, Name: "VS Code",
+			Platforms: []string{"windows"}, CategoryID: &codeCatID,
+			FirstSeenAt: time.Now().AddDate(0, 0, -6),
+			LastSeenAt:  time.Now(),
+		},
+		{
+			ID: chromeAppID, UserID: userID, Name: "Google Chrome",
+			Platforms: []string{"windows"}, CategoryID: &browseCatID,
+			FirstSeenAt: time.Now().AddDate(0, 0, -6),
+			LastSeenAt:  time.Now(),
+		},
+	})
+
+	// 5. Seed Random Events spanning the last 7 days
 	var events []models.ActivityEvent
 	now := time.Now()
 
@@ -63,9 +83,9 @@ func main() {
 		events = append(events, models.ActivityEvent{
 			UserID:       userID,
 			DeviceID:     deviceID,
+			AppID:        &vsCodeAppID,
 			AppName:      "VS Code",
 			WindowTitle:  "timepad-server - server/main.go",
-			CategoryID:   &codeCatID,
 			StartTime:    targetDay,
 			EndTime:      targetDay.Add(2 * time.Hour),
 			DurationSecs: 7200,
@@ -76,9 +96,9 @@ func main() {
 		events = append(events, models.ActivityEvent{
 			UserID:       userID,
 			DeviceID:     deviceID,
+			AppID:        &chromeAppID,
 			AppName:      "Google Chrome",
 			WindowTitle:  "Golang Documentation",
-			CategoryID:   &browseCatID,
 			StartTime:    targetDay.Add(2 * time.Hour),
 			EndTime:      targetDay.Add(3 * time.Hour),
 			DurationSecs: 3600,

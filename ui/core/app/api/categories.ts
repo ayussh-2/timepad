@@ -1,35 +1,18 @@
 import type { ApiEnvelope, Category, CategoryRule } from "~/app/types";
 import { client } from "./client";
 
-export interface RawCategory {
-    ID: string;
-    UserID: string | null;
-    Name: string;
-    Color: string;
-    Icon: string;
-    IsSystem: boolean;
-    IsProductive: boolean | null;
-    Rules: CategoryRule[] | null;
-}
+// Server now emits snake_case JSON thanks to struct tags — RawCategory = Category.
+export type RawCategory = Category;
 
 export function normalizeCategory(c: RawCategory): Category {
-    return {
-        id: c.ID,
-        user_id: c.UserID,
-        name: c.Name,
-        color: c.Color,
-        icon: c.Icon,
-        is_system: c.IsSystem,
-        is_productive: c.IsProductive,
-        rules: c.Rules ?? [],
-    };
+    return c;
 }
 
 export const categoriesApi = {
     list: () =>
         client
-            .get<ApiEnvelope<RawCategory[]>>("/categories")
-            .then((r) => (r.data.data ?? []).map(normalizeCategory)),
+            .get<ApiEnvelope<Category[]>>("/categories")
+            .then((r) => r.data.data ?? []),
 
     create: (payload: {
         name: string;
@@ -38,8 +21,8 @@ export const categoriesApi = {
         is_productive?: boolean | null;
     }) =>
         client
-            .post<ApiEnvelope<RawCategory>>("/categories", payload)
-            .then((r) => normalizeCategory(r.data.data)),
+            .post<ApiEnvelope<Category>>("/categories", payload)
+            .then((r) => r.data.data),
 
     update: (
         id: string,
@@ -48,7 +31,7 @@ export const categoriesApi = {
             color: string;
             icon: string;
             is_productive: boolean | null;
-            rules: import("~/app/types").CategoryRule[];
+            rules: CategoryRule[];
         }>,
     ) =>
         client

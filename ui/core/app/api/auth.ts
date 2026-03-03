@@ -46,13 +46,14 @@ export const authApi = {
 
     refresh: (refresh_token: string) =>
         client
-            .post<{ access_token: string; refresh_token: string }>(
-                "/auth/refresh",
-                {
-                    refresh_token,
-                },
-            )
-            .then((r) => r.data),
+            .post<{
+                success: boolean;
+                data: { AccessToken: string; RefreshToken: string };
+            }>("/auth/refresh", { refresh_token })
+            .then((r) => ({
+                access_token: r.data.data.AccessToken,
+                refresh_token: r.data.data.RefreshToken,
+            })),
 
     deleteAccount: () =>
         client.delete<{ message: string }>("/auth/account").then((r) => r.data),

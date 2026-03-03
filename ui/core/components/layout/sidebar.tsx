@@ -15,7 +15,7 @@ const NAV = [
     { to: "/reports", label: "Reports", icon: BarChart2 },
     { to: "/categories", label: "Categories", icon: FolderOpen },
     { to: "/devices", label: "Devices", icon: Monitor },
-    { to: "/settings", label: "Settings", icon: Settings },
+    // { to: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function Sidebar() {

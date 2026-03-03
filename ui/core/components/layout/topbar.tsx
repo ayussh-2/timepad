@@ -15,7 +15,7 @@ export function Topbar() {
     const user = useAuthStore((s) => s.user);
     const logout = useAuthStore((s) => s.logout);
     const navigate = useNavigate();
-
+    console.log(user);
     const initials =
         user?.display_name
             ?.split(" ")
@@ -42,7 +42,7 @@ export function Topbar() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-44">
                     <div className="px-2 py-1.5">
-                        <p className="text-sm font-medium text-ink">
+                        <p className="text-sm font-medium text-ink capitalize">
                             {user?.display_name}
                         </p>
                         <p className="text-xs text-secondary-text truncate">
@@ -50,18 +50,18 @@ export function Topbar() {
                         </p>
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate("/settings")}>
+                    {/* <DropdownMenuItem onClick={() => navigate("/settings")}>
                         <Settings className="h-4 w-4 mr-2" />
                         Settings
-                    </DropdownMenuItem>
+                    </DropdownMenuItem> */}
                     <DropdownMenuItem
                         onClick={() => {
                             logout();
                             navigate("/login");
                         }}
-                        className="text-destructive focus:text-destructive"
+                        className="text-destructive focus:text-white"
                     >
-                        <LogOut className="h-4 w-4 mr-2" />
+                        <LogOut className="h-4 w-4 mr-2 focus:text-white" />
                         Sign out
                     </DropdownMenuItem>
                 </DropdownMenuContent>

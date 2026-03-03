@@ -2,24 +2,24 @@ import type { ApiEnvelope, Device } from "~/app/types";
 import { client } from "./client";
 
 interface RawDevice {
-    ID: string;
-    UserID: string;
-    Name: string;
-    Platform: string;
-    DeviceKey: string;
-    LastSeenAt: string | null;
-    CreatedAt: string;
+    id: string;
+    user_id: string;
+    name: string;
+    platform: string;
+    device_key: string;
+    last_seen_at: string | null;
+    created_at: string;
 }
 
 function normalizeDevice(d: RawDevice): Device {
     return {
-        id: d.ID,
-        user_id: d.UserID,
-        name: d.Name,
-        platform: d.Platform as Device["platform"],
-        device_key: d.DeviceKey,
-        last_seen_at: d.LastSeenAt,
-        created_at: d.CreatedAt,
+        id: d.id,
+        user_id: d.user_id,
+        name: d.name,
+        platform: d.platform as Device["platform"],
+        device_key: d.device_key,
+        last_seen_at: d.last_seen_at,
+        created_at: d.created_at,
     };
 }
 

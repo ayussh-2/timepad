@@ -46,7 +46,7 @@
     --color-muted: var(--muted);
     --color-muted-foreground: var(--muted-foreground);
     --color-accent-shadcn: var(--accent);
-    --color-accent-foreground: var(--accent-foreground);
+    --color-accent-foreground: var(--accent);
     --color-destructive: var(--destructive);
     --color-border: var(--border);
     --color-input: var(--input);

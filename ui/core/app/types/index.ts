@@ -47,21 +47,35 @@ export interface CategoryRule {
     value: string;
 }
 
+export interface App {
+    id: string;
+    user_id: string;
+    name: string;
+    icon: string;
+    platforms: string[];
+    category_id: string | null;
+    category: Category | null;
+    is_system: boolean;
+    first_seen_at: string;
+    last_seen_at: string;
+}
+
 export interface TimelineEntry {
     id: string;
     user_id: string;
     device_id: string;
+    app_id: string | null;
     app_name: string;
     window_title: string;
     url: string;
-    category_id: string | null;
-    category: Category | null;
-    device: Device | null;
     start_time: string;
     end_time: string;
     duration_secs: number;
     is_idle: boolean;
     is_private: boolean;
+    device: Device | null;
+    /** The app record, including its assigned category. */
+    app: App | null;
 }
 
 export interface TimelineResponse {
@@ -70,10 +84,13 @@ export interface TimelineResponse {
 }
 
 export interface AppUsage {
+    app_id: string;
     app_name: string;
     total_secs: number;
     category?: Category | null;
     platforms?: string[];
+    icon?: string;
+    is_system?: boolean;
 }
 
 export interface DeviceUsage {

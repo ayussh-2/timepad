@@ -53,7 +53,7 @@ func (s *ReportsService) GetReports(userID string, params ReportParams) (*Report
 	}
 
 	var events []models.ActivityEvent
-	err := query.Preload("Category").Preload("Device").Find(&events).Error
+	err := query.Preload("App.Category").Preload("Device").Find(&events).Error
 	if err != nil {
 		return nil, errors.New("failed to fetch events for report")
 	}
@@ -79,8 +79,8 @@ func (s *ReportsService) GetReports(userID string, params ReportParams) (*Report
 		report.DeviceUsage[e.Device.Name] += e.DurationSecs
 
 		categoryName := "Uncategorized"
-		if e.CategoryID != nil && e.Category.Name != "" {
-			categoryName = e.Category.Name
+		if e.AppID != nil && e.App.CategoryID != nil && e.App.Category != nil && e.App.Category.Name != "" {
+			categoryName = e.App.Category.Name
 		}
 		report.CategoryUsage[categoryName] += e.DurationSecs
 	}

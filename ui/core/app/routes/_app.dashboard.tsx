@@ -3,7 +3,7 @@ import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { AppTimelineDrawer } from "~/components/dashboard/app-timeline-drawer";
 import { DeviceBreakdownCard } from "~/components/dashboard/device-breakdown-card";
-import { ProductivityRing } from "~/components/dashboard/productivity-ring";
+import { CategoryRing } from "~/components/dashboard/category-ring";
 import { TopAppsCard } from "~/components/dashboard/top-apps-card";
 import { WeeklySpark } from "~/components/dashboard/weekly-spark";
 import { DateNavigator } from "~/components/ui/date-navigator";
@@ -111,11 +111,11 @@ export default function DashboardPage() {
                             <Card>
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-sm font-medium text-secondary-text">
-                                        Productivity
+                                        By category
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="pt-2 pb-8">
-                                    <ProductivityRing summary={dailySummary} />
+                                <CardContent className="pt-2 pb-4">
+                                    <CategoryRing summary={dailySummary} />
                                 </CardContent>
                             </Card>
                         </div>

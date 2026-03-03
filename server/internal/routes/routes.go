@@ -31,6 +31,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil, rdb *r
 	summaryService := services.NewSummaryService(db)
 	reportsService := services.NewReportsService(db)
 	categoriesService := services.NewCategoriesService(db)
+	appsService := services.NewAppsService(db)
 	devicesService := services.NewDevicesService(db)
 	settingsService := services.NewSettingsService(db)
 
@@ -41,6 +42,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil, rdb *r
 	summaryController := controllers.NewSummaryController(summaryService)
 	reportsController := controllers.NewReportsController(reportsService)
 	categoriesController := controllers.NewCategoriesController(categoriesService)
+	appsController := controllers.NewAppsController(appsService)
 	devicesController := controllers.NewDevicesController(devicesService)
 	settingsController := controllers.NewSettingsController(settingsService)
 
@@ -59,6 +61,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil, rdb *r
 		RegisterSummaryRoutes(protected, summaryController)
 		RegisterReportsRoutes(protected, reportsController)
 		RegisterCategoriesRoutes(protected, categoriesController)
+		RegisterAppsRoutes(protected, appsController)
 		RegisterDevicesRoutes(protected, devicesController)
 		RegisterSettingsRoutes(protected, settingsController)
 	}

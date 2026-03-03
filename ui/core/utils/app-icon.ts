@@ -19,6 +19,7 @@ const APP_ICON_MAP: Record<string, string> = {
     // Editors / IDEs
     "visual studio code": "visualstudiocode",
     "vs code": "visualstudiocode",
+    Code: "visualstudiocode",
     vscode: "visualstudiocode",
     "visual studio": "visualstudio",
     intellij: "intellijidea",
