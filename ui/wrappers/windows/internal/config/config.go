@@ -23,12 +23,24 @@ func configPath() string {
 	return filepath.Join(os.Getenv("APPDATA"), "timepad", "config.json")
 }
 
+const (
+	defaultServerURL    = "http://localhost:8080/api/v1"
+	defaultDashboardURL = "http://localhost:5173"
+)
+
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 func Load() (*Config, error) {
 	p := configPath()
 	cfg := &Config{
 		path:         p,
-		ServerURL:    "http://localhost:8080/api/v1",
-		DashboardURL: "http://localhost:5173",
+		ServerURL:    envOrDefault("TIMEPAD_SERVER_URL", defaultServerURL),
+		DashboardURL: envOrDefault("TIMEPAD_DASHBOARD_URL", defaultDashboardURL),
 	}
 
 	data, err := os.ReadFile(p)
@@ -43,10 +55,10 @@ func Load() (*Config, error) {
 	}
 	cfg.path = p
 	if cfg.ServerURL == "" {
-		cfg.ServerURL = "http://localhost:8080/api/v1"
+		cfg.ServerURL = envOrDefault("TIMEPAD_SERVER_URL", defaultServerURL)
 	}
 	if cfg.DashboardURL == "" {
-		cfg.DashboardURL = "http://localhost:5173"
+		cfg.DashboardURL = envOrDefault("TIMEPAD_DASHBOARD_URL", defaultDashboardURL)
 	}
 	return cfg, nil
 }
