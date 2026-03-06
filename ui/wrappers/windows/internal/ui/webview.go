@@ -40,21 +40,12 @@ func initDashboard(cfg *config.Config) {
 
 	w.SetTitle("Timepad")
 	w.SetSize(1280, 840, webview.HintNone)
+	// Phase 1: expose the native bridge object only — no calls yet.
 	w.Init(fmt.Sprintf(`
 window.TimePadBridge = {
   getDeviceKey: function() { return %q; },
   getPlatform:  function() { return "windows"; }
 };
-(function() {
-  try {
-    var raw = localStorage.getItem('auth-store');
-    if (!raw) return;
-    var s = JSON.parse(raw).state;
-    if (s && s.accessToken && s.refreshToken) {
-      window.timePadSaveConfig(s.accessToken, s.refreshToken, '');
-    }
-  } catch(_) {}
-})();
 `, cfg.GetDeviceKey()))
 
 	if err := w.Bind("timePadSaveConfig", func(accessToken, refreshToken, deviceKey string) {
@@ -71,6 +62,20 @@ window.TimePadBridge = {
 	}); err != nil {
 		log.Printf("webview: bind: %v", err)
 	}
+
+	// Phase 2: token-sync IIFE — runs after timePadSaveConfig is bound.
+	w.Init(`
+(function() {
+  try {
+    var raw = localStorage.getItem('auth-store');
+    if (!raw) return;
+    var s = JSON.parse(raw).state;
+    if (s && s.accessToken && s.refreshToken) {
+      window.timePadSaveConfig(s.accessToken, s.refreshToken, '');
+    }
+  } catch(_) {}
+})();
+`)
 
 	log.Printf("webview: navigating to %s", cfg.GetDashboardURL())
 	w.Navigate(cfg.GetDashboardURL())

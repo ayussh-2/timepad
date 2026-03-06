@@ -79,24 +79,9 @@ func (s *EventsService) IngestEvents(params IngestEventsParams) (IngestResult, e
 		return IngestResult{}, errors.New("invalid user ID")
 	}
 
-	// Load user settings for excluded apps/urls filtering
-	var settings models.UserSetting
-	hasSettings := true
-	if err := s.db.Where("user_id = ?", params.UserID).First(&settings).Error; err != nil {
-		hasSettings = false
-	}
-
-	// Build lookup sets for O(1) filtering
+	// TODO: load user settings for excluded apps/urls filtering when settings UI is ready
 	excludedApps := make(map[string]bool)
 	excludedUrls := make(map[string]bool)
-	if hasSettings {
-		for _, app := range settings.ExcludedApps {
-			excludedApps[strings.ToLower(app)] = true
-		}
-		for _, url := range settings.ExcludedUrls {
-			excludedUrls[strings.ToLower(url)] = true
-		}
-	}
 
 	events := make([]models.ActivityEvent, 0, len(params.Events))
 	for _, e := range params.Events {

@@ -35,7 +35,17 @@ type RegisterDeviceParams struct {
 	Platform string `json:"platform" binding:"required,oneof=android windows browser"`
 }
 
-func (s *DevicesService) RegisterDevice(userID string, params RegisterDeviceParams) (*models.Device, error) {
+type RegisterDeviceResponse struct {
+	ID         string  `json:"id"`
+	UserID     string  `json:"user_id"`
+	Name       string  `json:"name"`
+	Platform   string  `json:"platform"`
+	DeviceKey  string  `json:"device_key"`
+	LastSeenAt *string `json:"last_seen_at"`
+	CreatedAt  string  `json:"created_at"`
+}
+
+func (s *DevicesService) RegisterDevice(userID string, params RegisterDeviceParams) (*RegisterDeviceResponse, error) {
 	parsedUserID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, errors.New("invalid user ID")
@@ -54,6 +64,36 @@ func (s *DevicesService) RegisterDevice(userID string, params RegisterDevicePara
 		return nil, errors.New("failed to register device")
 	}
 
+	var lastSeen *string
+	if device.LastSeenAt != nil {
+		s := device.LastSeenAt.Format("2006-01-02T15:04:05Z07:00")
+		lastSeen = &s
+	}
+	return &RegisterDeviceResponse{
+		ID:         device.ID.String(),
+		UserID:     device.UserID.String(),
+		Name:       device.Name,
+		Platform:   device.Platform,
+		DeviceKey:  device.DeviceKey,
+		LastSeenAt: lastSeen,
+		CreatedAt:  device.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}, nil
+}
+
+type RenameDeviceParams struct {
+	Name string `json:"name" binding:"required"`
+}
+
+func (s *DevicesService) RenameDevice(userID string, deviceID string, params RenameDeviceParams) (*models.Device, error) {
+	var device models.Device
+	result := s.db.Where("id = ? AND user_id = ?", deviceID, userID).First(&device)
+	if result.Error != nil {
+		return nil, utils.NewNotFoundError("device not found or unauthorized")
+	}
+	device.Name = params.Name
+	if err := s.db.Save(&device).Error; err != nil {
+		return nil, errors.New("failed to rename device")
+	}
 	return &device, nil
 }
 

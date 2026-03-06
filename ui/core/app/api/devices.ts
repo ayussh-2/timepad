@@ -1,5 +1,9 @@
 import type { ApiEnvelope, Device } from "~/app/types";
+import { bust, cached } from "~/lib/request-cache";
 import { client } from "./client";
+
+const CACHE_KEY = "devices:list";
+const TTL = 5 * 60_000;
 
 interface RawDevice {
     id: string;
@@ -25,15 +29,34 @@ function normalizeDevice(d: RawDevice): Device {
 
 export const devicesApi = {
     list: () =>
-        client
-            .get<ApiEnvelope<RawDevice[]>>("/devices")
-            .then((r) => (r.data.data ?? []).map(normalizeDevice)),
+        cached(
+            CACHE_KEY,
+            () =>
+                client
+                    .get<ApiEnvelope<RawDevice[]>>("/devices")
+                    .then((r) => (r.data.data ?? []).map(normalizeDevice)),
+            TTL,
+        ),
 
     register: (name: string, platform: "android" | "windows" | "browser") =>
         client
             .post<ApiEnvelope<RawDevice>>("/devices", { name, platform })
-            .then((r) => normalizeDevice(r.data.data)),
+            .then((r) => {
+                bust(CACHE_KEY);
+                return normalizeDevice(r.data.data);
+            }),
+
+    rename: (id: string, name: string) =>
+        client
+            .patch<ApiEnvelope<RawDevice>>(`/devices/${id}`, { name })
+            .then((r) => {
+                bust(CACHE_KEY);
+                return normalizeDevice(r.data.data);
+            }),
 
     delete: (id: string) =>
-        client.delete<ApiEnvelope<null>>(`/devices/${id}`).then((r) => r.data),
+        client.delete<ApiEnvelope<null>>(`/devices/${id}`).then((r) => {
+            bust(CACHE_KEY);
+            return r.data;
+        }),
 };

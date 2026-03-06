@@ -1,5 +1,9 @@
 import type { ApiEnvelope, UserSettings } from "~/app/types";
+import { cached } from "~/lib/request-cache";
 import { client } from "./client";
+
+const CACHE_KEY = "settings";
+const TTL = 5 * 60_000;
 
 interface RawSettings {
     UserID: string;
@@ -25,9 +29,14 @@ function normalizeSettings(s: RawSettings): UserSettings {
 
 export const settingsApi = {
     get: () =>
-        client
-            .get<ApiEnvelope<RawSettings>>("/settings")
-            .then((r) => normalizeSettings(r.data.data)),
+        cached(
+            CACHE_KEY,
+            () =>
+                client
+                    .get<ApiEnvelope<RawSettings>>("/settings")
+                    .then((r) => normalizeSettings(r.data.data)),
+            TTL,
+        ),
 
     update: (payload: Partial<Omit<UserSettings, "user_id" | "updated_at">>) =>
         client.put<ApiEnvelope<null>>("/settings", payload).then((r) => r.data),

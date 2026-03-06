@@ -45,13 +45,37 @@ func (dc *DevicesController) RegisterDevice(c *gin.Context) {
 		return
 	}
 
-	device, err := dc.service.RegisterDevice(userID.(string), req)
+	resp, err := dc.service.RegisterDevice(userID.(string), req)
 	if err != nil {
 		utils.HandleError(c, "Failed to register device", err)
 		return
 	}
 
-	utils.Created(c, "Device registered successfully", device)
+	utils.Created(c, "Device registered successfully", resp)
+}
+
+func (dc *DevicesController) RenameDevice(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		utils.Unauthorized(c, "User ID not found in context")
+		return
+	}
+
+	deviceID := c.Param("id")
+
+	var req services.RenameDeviceParams
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validation failed", err.Error())
+		return
+	}
+
+	device, err := dc.service.RenameDevice(userID.(string), deviceID, req)
+	if err != nil {
+		utils.HandleError(c, "Failed to rename device", err)
+		return
+	}
+
+	utils.OK(c, "Device renamed successfully", device)
 }
 
 func (dc *DevicesController) DeleteDevice(c *gin.Context) {

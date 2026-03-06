@@ -5,7 +5,7 @@ export function useTimeline(date: string) {
     const timeline = useActivityStore((s) => s.timeline);
     const cursor = useActivityStore((s) => s.timelineCursor);
     const hasMore = useActivityStore((s) => s.timelineHasMore);
-    const isLoading = useActivityStore((s) => s.isLoading);
+    const isLoading = useActivityStore((s) => s.timelineLoading);
     const fetchTimeline = useActivityStore((s) => s.fetchTimeline);
 
     useEffect(() => {

@@ -4,21 +4,25 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * Persistent config backed by SharedPreferences.
- * Default URLs come from BuildConfig (set via local.properties at build time).
+ * Persistent config backed by SharedPreferences. Default URLs come from BuildConfig (set via
+ * local.properties at build time).
  */
 class Config(context: Context) {
 
     private val prefs: SharedPreferences =
-        context.getSharedPreferences("timepad", Context.MODE_PRIVATE)
+            context.getSharedPreferences("timepad", Context.MODE_PRIVATE)
 
     val serverURL: String
-        get() = prefs.getString("server_url", BuildConfig.SERVER_URL)
-            ?.takeIf { it.isNotBlank() } ?: BuildConfig.SERVER_URL
+        get() =
+                prefs.getString("server_url", BuildConfig.SERVER_URL)?.takeIf { it.isNotBlank() }
+                        ?: BuildConfig.SERVER_URL
 
     val dashboardURL: String
-        get() = prefs.getString("dashboard_url", BuildConfig.DASHBOARD_URL)
-            ?.takeIf { it.isNotBlank() } ?: BuildConfig.DASHBOARD_URL
+        get() =
+                prefs.getString("dashboard_url", BuildConfig.DASHBOARD_URL)?.takeIf {
+                    it.isNotBlank()
+                }
+                        ?: BuildConfig.DASHBOARD_URL
 
     val accessToken: String
         get() = prefs.getString("access_token", "") ?: ""
@@ -30,13 +34,22 @@ class Config(context: Context) {
         get() = prefs.getString("device_key", "") ?: ""
 
     fun setTokens(access: String, refresh: String) {
-        prefs.edit()
-            .putString("access_token", access)
-            .putString("refresh_token", refresh)
-            .apply()
+        prefs.edit().putString("access_token", access).putString("refresh_token", refresh).apply()
     }
 
     fun setDeviceKey(key: String) {
         prefs.edit().putString("device_key", key).apply()
+    }
+
+    fun setServerURL(url: String) {
+        prefs.edit().putString("server_url", url).apply()
+    }
+
+    fun setDashboardURL(url: String) {
+        prefs.edit().putString("dashboard_url", url).apply()
+    }
+
+    fun resetURLs() {
+        prefs.edit().remove("server_url").remove("dashboard_url").apply()
     }
 }

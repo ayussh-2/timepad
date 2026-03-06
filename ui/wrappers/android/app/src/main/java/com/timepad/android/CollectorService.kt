@@ -8,7 +8,6 @@ import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
-import android.util.Log
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +19,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-private const val TAG = "CollectorService"
+private const val CTX = "Collector"
 private const val CHANNEL_ID = "timepad_collector"
 private const val NOTIFICATION_ID = 1
 private const val POLL_MS = 30_000L
@@ -43,7 +42,7 @@ class CollectorService : Service() {
         apiClient = ApiClient(cfg)
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
-        Log.d(TAG, "collector service created")
+        TPLog.d(CTX, "service created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -52,7 +51,7 @@ class CollectorService : Service() {
     }
 
     private suspend fun runCollector() {
-        Log.d(TAG, "collector started — server=${cfg.serverURL}")
+        TPLog.d(CTX, "collector started — server=${cfg.serverURL}")
         var lastFlush = System.currentTimeMillis()
 
         while (currentCoroutineContext().isActive) {
@@ -73,7 +72,7 @@ class CollectorService : Service() {
 
         // App changed — close previous session
         currentApp?.let { prev ->
-            Log.d(TAG, "app change: $prev -> $fg")
+            TPLog.d(CTX, "app change: $prev -> $fg")
             buffer.add(
                     EventInput(
                             appName = prev,
@@ -89,13 +88,13 @@ class CollectorService : Service() {
         currentStart = now
 
         if (buffer.size >= MAX_BUFFER) {
-            Log.d(TAG, "buffer full (${buffer.size}), early flush")
+            TPLog.d(CTX, "buffer full (${buffer.size}), early flush")
             flush()
         }
     }
 
     private fun flush() {
-        // Close the ongoing session snapshot before sending
+        // Snapshot the ongoing session before flushing
         currentApp?.let { app ->
             val now = Instant.now()
             buffer.add(
@@ -110,29 +109,25 @@ class CollectorService : Service() {
             currentStart = now
         }
 
-        if (buffer.isEmpty()) {
-            Log.d(TAG, "flush: buffer empty")
-            return
-        }
+        TPLog.d(CTX, "flush: currentApp=$currentApp buffer=${buffer.size}")
+
+        if (buffer.isEmpty()) return
 
         if (cfg.deviceKey.isEmpty() || cfg.accessToken.isEmpty()) {
-            Log.w(
-                    TAG,
+            TPLog.w(
+                    CTX,
                     "not authenticated (device_key=${cfg.deviceKey.isNotEmpty()}" +
-                            " access_token=${cfg.accessToken.isNotEmpty()}), dropping ${buffer.size} events"
+                            " access_token=${cfg.accessToken.isNotEmpty()}) — dropping ${buffer.size} event(s)"
             )
             buffer.clear()
             return
         }
 
-        val batch = buffer.toList()
+        val batch = ArrayList(buffer)
         buffer.clear()
-        Log.d(TAG, "sending batch of ${batch.size} events")
+        TPLog.d(CTX, "flushing ${batch.size} event(s)")
 
-        scope.launch {
-            apiClient.postEvents(batch)
-            Log.d(TAG, "sent ${batch.size} events OK")
-        }
+        scope.launch { apiClient.postEvents(batch) }
     }
 
     /**
@@ -142,14 +137,18 @@ class CollectorService : Service() {
     private fun getForegroundApp(): String? {
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val now = System.currentTimeMillis()
-        val stats =
-                usm.queryUsageStats(
-                        UsageStatsManager.INTERVAL_DAILY,
-                        now - 10_000L,
-                        now,
-                )
-        if (stats.isNullOrEmpty()) return null
-        return stats.maxByOrNull { it.lastTimeUsed }?.packageName
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, now - 10_000L, now)
+        if (stats.isNullOrEmpty()) {
+            TPLog.w(CTX, "getForegroundApp: usage stats empty — permission granted?")
+            return null
+        }
+        val app =
+                stats
+                        .filter { it.packageName != packageName && it.lastTimeUsed > 0 }
+                        .maxByOrNull { it.lastTimeUsed }
+                        ?.packageName
+        TPLog.d(CTX, "getForegroundApp: $app")
+        return app
     }
 
     private fun fmt(instant: Instant): String = DateTimeFormatter.ISO_INSTANT.format(instant)
@@ -178,6 +177,6 @@ class CollectorService : Service() {
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()
-        Log.d(TAG, "collector service destroyed")
+        TPLog.d(CTX, "service destroyed")
     }
 }

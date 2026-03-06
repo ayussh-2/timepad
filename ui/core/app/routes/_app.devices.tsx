@@ -1,7 +1,16 @@
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
-import { Copy, Monitor, Plus, Smartphone, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+    Check,
+    Copy,
+    Monitor,
+    Pencil,
+    Plus,
+    Smartphone,
+    Trash2,
+    X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { devicesApi } from "~/app/api/devices";
 import { EmptyState } from "~/components/ui/empty-state";
 import { useNativeBridge } from "~/hooks/use-native-bridge";
@@ -93,12 +102,7 @@ function RegisterDeviceSheet({
             const device = await devicesApi.register(name.trim(), platform);
             setCreated(device);
             onRegistered(device);
-            if (
-                bridge.isNative &&
-                bridge.platform === "windows" &&
-                accessToken &&
-                refreshToken
-            ) {
+            if (bridge.isNative && accessToken && refreshToken) {
                 bridge.saveConfig(accessToken, refreshToken, device.device_key);
             }
         } catch {
@@ -207,6 +211,143 @@ function RegisterDeviceSheet({
     );
 }
 
+function DeviceCard({
+    device,
+    onRename,
+    onDelete,
+}: {
+    device: Device;
+    onRename: (id: string, name: string) => Promise<void>;
+    onDelete: (id: string) => Promise<void>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(device.name);
+    const [saving, setSaving] = useState(false);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    const startEdit = () => {
+        setDraft(device.name);
+        setEditing(true);
+        setTimeout(() => inputRef.current?.select(), 0);
+    };
+
+    const cancelEdit = () => {
+        setEditing(false);
+        setDraft(device.name);
+    };
+
+    const commitEdit = async () => {
+        if (!draft.trim() || draft.trim() === device.name) {
+            cancelEdit();
+            return;
+        }
+        setSaving(true);
+        await onRename(device.id, draft);
+        setSaving(false);
+        setEditing(false);
+    };
+
+    return (
+        <Card>
+            <CardContent className="flex items-center gap-4 py-4">
+                <div className="text-secondary-text">
+                    <PlatformIcon platform={device.platform} />
+                </div>
+                <div className="flex-1 min-w-0">
+                    {editing ? (
+                        <input
+                            ref={inputRef}
+                            value={draft}
+                            onChange={(e) => setDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") commitEdit();
+                                if (e.key === "Escape") cancelEdit();
+                            }}
+                            disabled={saving}
+                            className="w-full text-sm font-medium text-ink bg-transparent border-b border-accent outline-none"
+                        />
+                    ) : (
+                        <p className="text-sm font-medium text-ink truncate">
+                            {device.name}
+                        </p>
+                    )}
+                    <p className="text-xs text-secondary-text capitalize">
+                        {device.platform}
+                        {device.last_seen_at && (
+                            <>
+                                {" "}
+                                · Last seen{" "}
+                                {dayjs(device.last_seen_at).fromNow()}
+                            </>
+                        )}
+                    </p>
+                </div>
+                {editing ? (
+                    <>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 h-8 w-8"
+                            onClick={commitEdit}
+                            disabled={saving}
+                        >
+                            <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 h-8 w-8"
+                            onClick={cancelEdit}
+                            disabled={saving}
+                        >
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </>
+                ) : (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 h-8 w-8"
+                        onClick={startEdit}
+                    >
+                        <Pencil className="h-4 w-4" />
+                    </Button>
+                )}
+                <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0 text-destructive hover:text-destructive h-8 w-8"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>
+                                Remove &ldquo;{device.name}&rdquo;?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                All activity events from this device will be
+                                permanently deleted.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={() => onDelete(device.id)}
+                            >
+                                Remove
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function DevicesPage() {
     const [devices, setDevices] = useState<Device[]>([]);
     const [loading, setLoading] = useState(true);
@@ -222,6 +363,13 @@ export default function DevicesPage() {
     const handleDelete = async (id: string) => {
         await devicesApi.delete(id);
         setDevices((prev) => prev.filter((d) => d.id !== id));
+    };
+
+    const handleRename = async (id: string, name: string) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const updated = await devicesApi.rename(id, trimmed);
+        setDevices((prev) => prev.map((d) => (d.id === id ? updated : d)));
     };
 
     return (
@@ -254,66 +402,12 @@ export default function DevicesPage() {
             ) : (
                 <div className="space-y-3">
                     {devices.map((device) => (
-                        <Card key={device.id}>
-                            <CardContent className="flex items-center gap-4 py-4">
-                                <div className="text-secondary-text">
-                                    <PlatformIcon platform={device.platform} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-ink">
-                                        {device.name}
-                                    </p>
-                                    <p className="text-xs text-secondary-text capitalize">
-                                        {device.platform}
-                                        {device.last_seen_at && (
-                                            <>
-                                                {" "}
-                                                · Last seen{" "}
-                                                {dayjs(
-                                                    device.last_seen_at,
-                                                ).fromNow()}
-                                            </>
-                                        )}
-                                    </p>
-                                </div>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="shrink-0 text-destructive hover:text-destructive h-8 w-8"
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>
-                                                Remove &ldquo;{device.name}
-                                                &rdquo;?
-                                            </AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                All activity events from this
-                                                device will be permanently
-                                                deleted.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>
-                                                Cancel
-                                            </AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={() =>
-                                                    handleDelete(device.id)
-                                                }
-                                            >
-                                                Remove
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </CardContent>
-                        </Card>
+                        <DeviceCard
+                            key={device.id}
+                            device={device}
+                            onRename={handleRename}
+                            onDelete={handleDelete}
+                        />
                     ))}
                 </div>
             )}

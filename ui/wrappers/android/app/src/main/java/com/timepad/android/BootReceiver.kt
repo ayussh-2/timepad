@@ -4,13 +4,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
-/**
- * Restarts the collector service after a device reboot.
- * Requires RECEIVE_BOOT_COMPLETED permission.
- */
+private const val CTX = "BootReceiver"
+
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+            TPLog.d(CTX, "boot completed — starting collector")
             context.startForegroundService(Intent(context, CollectorService::class.java))
         }
     }
