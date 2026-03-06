@@ -80,15 +80,15 @@ func (ac *AuthController) Login(c *gin.Context) {
 }
 
 func (ac *AuthController) Refresh(c *gin.Context) {
-	userID, exists := c.Get("userID")
-	if !exists {
-		utils.Unauthorized(c, "User ID not found in context")
+	var req RefreshRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "Validation failed", err.Error())
 		return
 	}
 
-	result, err := ac.service.RefreshTokens(userID.(string))
+	result, err := ac.service.RefreshTokensFromToken(req.RefreshToken)
 	if err != nil {
-		utils.Unauthorized(c, "Failed to refresh tokens")
+		utils.Unauthorized(c, "Invalid or expired refresh token")
 		return
 	}
 

@@ -146,6 +146,16 @@ func (s *AuthService) RefreshTokens(userID string) (*RefreshTokensResult, error)
 	}, nil
 }
 
+// RefreshTokensFromToken validates the refresh token, extracts the userID,
+// and issues a fresh access + refresh token pair.
+func (s *AuthService) RefreshTokensFromToken(refreshToken string) (*RefreshTokensResult, error) {
+	claims, err := s.jwtUtil.ValidateToken(refreshToken)
+	if err != nil {
+		return nil, errors.New("invalid or expired refresh token")
+	}
+	return s.RefreshTokens(claims.UserID)
+}
+
 // DeleteAccount permanently removes the user and all their associated data
 // via the CASCADE constraints defined on the database relations.
 func (s *AuthService) DeleteAccount(userID string) error {
