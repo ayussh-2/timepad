@@ -1,6 +1,3 @@
-// Package app exposes application initialisation outside the internal tree
-// so Vercel's Go runtime (which imports api/ as a non-module package path)
-// can reach it without triggering Go's internal-package restriction.
 package app
 
 import (
@@ -19,8 +16,6 @@ var (
 	handler http.Handler
 )
 
-// Handler returns the singleton http.Handler, initialising everything on the
-// first call. Safe for concurrent use; subsequent calls return immediately.
 func Handler() http.Handler {
 	once.Do(func() {
 		cfg := config.Load()

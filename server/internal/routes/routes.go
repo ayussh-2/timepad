@@ -46,6 +46,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, jwtUtil *utils.JWTUtil, rdb *r
 	devicesController := controllers.NewDevicesController(devicesService)
 	settingsController := controllers.NewSettingsController(settingsService)
 
+	r.GET("/", func(c *gin.Context) {
+		c.String(200, "timepad server")
+	})
+
 	v1 := r.Group("/api/v1")
 
 	// Public routes
