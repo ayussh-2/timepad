@@ -4,6 +4,7 @@ import (
 	"crypto/rsa"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ayussh-2/timepad/config"
@@ -23,18 +24,18 @@ type JWTUtil struct {
 }
 
 func NewJWTUtil(cfg *config.Config) (*JWTUtil, error) {
-	privateBytes, err := os.ReadFile(cfg.JWTPrivateKey)
+	privateBytes, err := readPEM(cfg.JWTPrivateKey)
 	if err != nil {
-		return nil, errors.New("could not read private key file: " + err.Error())
+		return nil, errors.New("could not read private key: " + err.Error())
 	}
 	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(privateBytes)
 	if err != nil {
 		return nil, errors.New("could not parse private key: " + err.Error())
 	}
 
-	publicBytes, err := os.ReadFile(cfg.JWTPublicKey)
+	publicBytes, err := readPEM(cfg.JWTPublicKey)
 	if err != nil {
-		return nil, errors.New("could not read public key file: " + err.Error())
+		return nil, errors.New("could not read public key: " + err.Error())
 	}
 	publicKey, err := jwt.ParseRSAPublicKeyFromPEM(publicBytes)
 	if err != nil {
@@ -47,6 +48,16 @@ func NewJWTUtil(cfg *config.Config) (*JWTUtil, error) {
 		accessExpiry:  time.Duration(cfg.JWTAccessExpiry) * time.Second,
 		refreshExpiry: time.Duration(cfg.JWTRefreshExpiry) * time.Second,
 	}, nil
+}
+
+// readPEM reads PEM data either from a file path or directly as PEM content.
+// If the value starts with "-----BEGIN", it is used as-is (useful when
+// the PEM is stored in an environment variable instead of a file).
+func readPEM(pathOrContent string) ([]byte, error) {
+	if strings.HasPrefix(strings.TrimSpace(pathOrContent), "-----BEGIN") {
+		return []byte(pathOrContent), nil
+	}
+	return os.ReadFile(pathOrContent)
 }
 
 // NewJWTUtilFromKeys creates a JWTUtil directly from in-memory RSA keys.
