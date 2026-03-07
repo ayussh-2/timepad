@@ -9,8 +9,10 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -172,6 +174,12 @@ class MainActivity : AppCompatActivity() {
         layout.addView(label("Dashboard URL"))
         layout.addView(dashField)
 
+        val btnLogs =
+                Button(this).apply {
+                    text = "View Logs"
+                    setOnClickListener { showLogDialog() }
+                }
+        layout.addView(btnLogs)
         val builder =
                 AlertDialog.Builder(this)
                         .setTitle("Connection")
@@ -195,6 +203,44 @@ class MainActivity : AppCompatActivity() {
         }
 
         builder.show()
+    }
+
+    private fun showLogDialog() {
+        val lines = TPLog.lines()
+        val text = if (lines.isEmpty()) "no logs yet" else lines.joinToString("\n")
+
+        val dp = resources.displayMetrics.density
+        val pad = (12 * dp).toInt()
+
+        val tv =
+                TextView(this).apply {
+                    this.text = text
+                    setTextIsSelectable(true)
+                    typeface = android.graphics.Typeface.MONOSPACE
+                    textSize = 11f
+                    setPadding(pad, pad, pad, pad)
+                }
+
+        val scroll = ScrollView(this).apply { addView(tv) }
+
+        val dialog =
+                AlertDialog.Builder(this)
+                        .setTitle("Logs (last ${lines.size})")
+                        .setView(scroll)
+                        .setPositiveButton("Close", null)
+                        .setNeutralButton("Copy") { _, _ ->
+                            val cm =
+                                    getSystemService(CLIPBOARD_SERVICE) as
+                                            android.content.ClipboardManager
+                            cm.setPrimaryClip(
+                                    android.content.ClipData.newPlainText("timepad logs", text)
+                            )
+                        }
+                        .create()
+
+        dialog.show()
+        // scroll to bottom after layout
+        scroll.post { scroll.fullScroll(ScrollView.FOCUS_DOWN) }
     }
 
     private fun checkUsagePermissionAndStartCollector() {

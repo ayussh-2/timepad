@@ -137,6 +137,7 @@ export interface UserSettings {
     tracking_enabled: boolean;
     data_retention_days: number;
     updated_at: string;
+    timezone: string;
 }
 
 export interface PaginatedEvents {

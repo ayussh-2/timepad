@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -28,38 +29,70 @@ const (
 	defaultDashboardURL = "http://localhost:5173"
 )
 
-func envOrDefault(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+func loadDotEnv(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return
 	}
-	return fallback
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		idx := strings.IndexByte(line, '=')
+		if idx <= 0 {
+			continue
+		}
+		key := strings.TrimSpace(line[:idx])
+		val := strings.Trim(strings.TrimSpace(line[idx+1:]), `"`)
+		if os.Getenv(key) == "" {
+			_ = os.Setenv(key, val)
+		}
+	}
 }
 
 func Load() (*Config, error) {
 	p := configPath()
+
+	exeDir := func() string {
+		ex, err := os.Executable()
+		if err != nil {
+			return "."
+		}
+		return filepath.Dir(ex)
+	}()
+	loadDotEnv(filepath.Join(exeDir, ".env"))
+
 	cfg := &Config{
 		path:         p,
-		ServerURL:    envOrDefault("TIMEPAD_SERVER_URL", defaultServerURL),
-		DashboardURL: envOrDefault("TIMEPAD_DASHBOARD_URL", defaultDashboardURL),
+		ServerURL:    defaultServerURL,
+		DashboardURL: defaultDashboardURL,
 	}
 
 	data, err := os.ReadFile(p)
-	if os.IsNotExist(err) {
-		return cfg, nil
-	}
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := json.Unmarshal(data, cfg); err != nil {
-		return nil, err
+	if err == nil {
+		if err := json.Unmarshal(data, cfg); err != nil {
+			return nil, err
+		}
+		cfg.path = p
 	}
-	cfg.path = p
+
+	if v := os.Getenv("TIMEPAD_SERVER_URL"); v != "" {
+		cfg.ServerURL = v
+	}
+	if v := os.Getenv("TIMEPAD_DASHBOARD_URL"); v != "" {
+		cfg.DashboardURL = v
+	}
 	if cfg.ServerURL == "" {
-		cfg.ServerURL = envOrDefault("TIMEPAD_SERVER_URL", defaultServerURL)
+		cfg.ServerURL = defaultServerURL
 	}
 	if cfg.DashboardURL == "" {
-		cfg.DashboardURL = envOrDefault("TIMEPAD_DASHBOARD_URL", defaultDashboardURL)
+		cfg.DashboardURL = defaultDashboardURL
 	}
+
 	return cfg, nil
 }
 
@@ -109,8 +142,28 @@ func (c *Config) GetDeviceKey() string {
 	return c.DeviceKey
 }
 
+func (c *Config) GetServerURL() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.ServerURL
+}
+
 func (c *Config) GetDashboardURL() string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.DashboardURL
+}
+
+func (c *Config) SetServerURL(url string) {
+	c.mu.Lock()
+	c.ServerURL = url
+	c.mu.Unlock()
+	_ = c.Save()
+}
+
+func (c *Config) SetDashboardURL(url string) {
+	c.mu.Lock()
+	c.DashboardURL = url
+	c.mu.Unlock()
+	_ = c.Save()
 }

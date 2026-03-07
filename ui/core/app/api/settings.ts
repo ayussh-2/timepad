@@ -13,6 +13,7 @@ interface RawSettings {
     TrackingEnabled: boolean;
     DataRetentionDays: number;
     UpdatedAt: string;
+    Timezone: string;
 }
 
 function normalizeSettings(s: RawSettings): UserSettings {
@@ -24,6 +25,7 @@ function normalizeSettings(s: RawSettings): UserSettings {
         tracking_enabled: s.TrackingEnabled,
         data_retention_days: s.DataRetentionDays,
         updated_at: s.UpdatedAt,
+        timezone: s.Timezone ?? "UTC",
     };
 }
 

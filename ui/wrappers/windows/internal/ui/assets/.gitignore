@@ -1,0 +1,2 @@
+# icon.png is copied from ui/icons/logo.png at build time (see Makefile)
+icon.png

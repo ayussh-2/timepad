@@ -9,11 +9,16 @@ import (
 
 	"timepad/windows/internal/collector"
 	"timepad/windows/internal/config"
+	"timepad/windows/internal/logger"
 	"timepad/windows/internal/ui"
 )
 
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
+	buf := logger.New()
+	log.SetOutput(buf.Writer(os.Stderr))
+
 	log.Println("timepad: starting")
 
 	cfg, err := config.Load()
@@ -46,6 +51,6 @@ func main() {
 	log.Println("timepad: starting collector")
 	go collector.Run(ctx, cfg)
 	log.Println("timepad: starting tray")
-	ui.RunTray(cfg, cancel)
+	ui.RunTray(cfg, buf, cancel)
 	log.Println("timepad: exited")
 }

@@ -9,10 +9,7 @@ const bypassStaticRequests: Plugin = {
     name: "bypass-static-requests",
     configureServer(server) {
         server.middlewares.use((req, res, next) => {
-            if (
-                req.url === "/favicon.ico" ||
-                req.url?.startsWith("/.well-known/")
-            ) {
+            if (req.url?.startsWith("/.well-known/")) {
                 res.statusCode = 204;
                 res.end();
                 return;

@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"time"
 
 	"github.com/ayussh-2/timepad/internal/models"
 	"github.com/google/uuid"
@@ -19,41 +20,82 @@ func NewSettingsService(db *gorm.DB) *SettingsService {
 	}
 }
 
+// FullSettings is the combined response for GET /settings — it includes the
+// UserSetting row plus the user's IANA timezone from the users table.
+type FullSettings struct {
+	UserID            uuid.UUID      `json:"user_id"`
+	ExcludedApps      pq.StringArray `json:"excluded_apps"`
+	ExcludedUrls      pq.StringArray `json:"excluded_urls"`
+	IdleThreshold     int            `json:"idle_threshold"`
+	TrackingEnabled   bool           `json:"tracking_enabled"`
+	DataRetentionDays int            `json:"data_retention_days"`
+	UpdatedAt         time.Time      `json:"updated_at"`
+	Timezone          string         `json:"timezone"`
+}
+
 type UpdateSettingsParams struct {
 	ExcludedApps      *[]string `json:"excluded_apps"`
 	ExcludedUrls      *[]string `json:"excluded_urls"`
 	IdleThreshold     *int      `json:"idle_threshold"`
 	TrackingEnabled   *bool     `json:"tracking_enabled"`
 	DataRetentionDays *int      `json:"data_retention_days"`
+	Timezone          *string   `json:"timezone"`
 }
 
-func (s *SettingsService) GetSettings(userID string) (*models.UserSetting, error) {
-	var settings models.UserSetting
+func (s *SettingsService) GetSettings(userID string) (*FullSettings, error) {
+	parsedID, parseErr := uuid.Parse(userID)
+	if parseErr != nil {
+		return nil, errors.New("invalid user ID")
+	}
 
+	// Load the user's IANA timezone.
+	var user models.User
+	tz := "UTC"
+	if err := s.db.Select("timezone").Where("id = ?", userID).First(&user).Error; err == nil && user.Timezone != "" {
+		tz = user.Timezone
+	}
+
+	var settings models.UserSetting
 	err := s.db.Where("user_id = ?", userID).First(&settings).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			// No row yet — return defaults without persisting.
-			parsedID, parseErr := uuid.Parse(userID)
-			if parseErr != nil {
-				return nil, errors.New("invalid user ID")
-			}
-			return &models.UserSetting{
+			return &FullSettings{
 				UserID:            parsedID,
 				ExcludedApps:      pq.StringArray{},
 				ExcludedUrls:      pq.StringArray{},
 				IdleThreshold:     300,
 				TrackingEnabled:   true,
 				DataRetentionDays: 365,
+				Timezone:          tz,
 			}, nil
 		}
 		return nil, errors.New("failed to fetch settings")
 	}
 
-	return &settings, nil
+	return &FullSettings{
+		UserID:            settings.UserID,
+		ExcludedApps:      settings.ExcludedApps,
+		ExcludedUrls:      settings.ExcludedUrls,
+		IdleThreshold:     settings.IdleThreshold,
+		TrackingEnabled:   settings.TrackingEnabled,
+		DataRetentionDays: settings.DataRetentionDays,
+		UpdatedAt:         settings.UpdatedAt,
+		Timezone:          tz,
+	}, nil
 }
 
 func (s *SettingsService) UpdateSettings(userID string, params UpdateSettingsParams) error {
+	// Validate and apply timezone to the users table first (independent of UserSetting).
+	if params.Timezone != nil {
+		if _, err := time.LoadLocation(*params.Timezone); err != nil {
+			return errors.New("invalid timezone: must be a valid IANA timezone name (e.g. Asia/Kolkata)")
+		}
+		if err := s.db.Model(&models.User{}).Where("id = ?", userID).Update("timezone", *params.Timezone).Error; err != nil {
+			return errors.New("failed to update timezone")
+		}
+	}
+
 	var settings models.UserSetting
 	err := s.db.Where("user_id = ?", userID).First(&settings).Error
 

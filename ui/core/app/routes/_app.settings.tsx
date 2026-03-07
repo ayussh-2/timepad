@@ -53,6 +53,15 @@ export default function SettingsPage() {
         fetchSettings();
     }, [fetchSettings]);
 
+    // Auto-sync browser timezone to the server if it differs.
+    useEffect(() => {
+        if (!settings) return;
+        const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (settings.timezone !== browserTz) {
+            updateSettings({ timezone: browserTz });
+        }
+    }, [settings?.user_id]); // run once when settings first loads
+
     if (isLoading || !settings) {
         return (
             <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
@@ -89,6 +98,36 @@ export default function SettingsPage() {
                     >
                         {settings.tracking_enabled ? "On" : "Off"}
                     </Toggle>
+                </CardContent>
+            </Card>
+
+            {/* Timezone */}
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-secondary-text">
+                        Timezone
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Select
+                        value={settings.timezone}
+                        onValueChange={(v) => save({ timezone: v })}
+                    >
+                        <SelectTrigger className="w-full max-w-xs">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-72">
+                            {TIMEZONES.map((tz) => (
+                                <SelectItem key={tz} value={tz}>
+                                    {tz}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <p className="mt-2 text-xs text-secondary-text">
+                        Used to align daily and weekly summaries to your local
+                        time. Detected automatically from your browser.
+                    </p>
                 </CardContent>
             </Card>
 

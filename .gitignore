@@ -6,3 +6,5 @@ secrets/
 main.exe
 
 .env.prod
+
+timepad.exe

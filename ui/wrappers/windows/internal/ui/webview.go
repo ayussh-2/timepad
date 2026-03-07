@@ -49,8 +49,11 @@ window.TimePadBridge = {
 `, cfg.GetDeviceKey()))
 
 	if err := w.Bind("timePadSaveConfig", func(accessToken, refreshToken, deviceKey string) {
-		log.Printf("webview: timePadSaveConfig called device_key=%q tokens_present=%v",
-			deviceKey, accessToken != "")
+		if deviceKey != "" {
+			log.Printf("webview: timePadSaveConfig: registration device_key=%q", deviceKey)
+		} else {
+			log.Printf("webview: timePadSaveConfig: token-restore tokens_present=%v", accessToken != "")
+		}
 		cfg.SetTokens(accessToken, refreshToken)
 		if deviceKey != "" {
 			cfg.SetDeviceKey(deviceKey)
@@ -94,6 +97,8 @@ window.TimePadBridge = {
 	})
 	oldProc, _, _ = procSetWindowLongPtr.Call(uintptr(hwnd), ^uintptr(3), cb) // GWLP_WNDPROC = -4
 
+	SetWindowIcon(hwnd)
+
 	wv.Lock()
 	wv.w = w
 	wv.hwnd = hwnd
@@ -131,4 +136,19 @@ func TerminateDashboard() {
 	if w != nil {
 		w.Terminate()
 	}
+}
+
+// NavigateTo reloads the webview to the given URL. Safe to call from any goroutine.
+func NavigateTo(url string) {
+	wv.Lock()
+	w := wv.w
+	wv.Unlock()
+	if w == nil {
+		log.Println("webview: NavigateTo called but window not ready")
+		return
+	}
+	w.Dispatch(func() {
+		log.Printf("webview: navigating to %s", url)
+		w.Navigate(url)
+	})
 }
