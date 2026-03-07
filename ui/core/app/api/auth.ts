@@ -35,7 +35,7 @@ export const authApi = {
             .post<RawAuthResponse>("/auth/register", {
                 email,
                 password,
-                display_name,
+                name: display_name,
             })
             .then((r) => normalize(r.data.data)),
 
