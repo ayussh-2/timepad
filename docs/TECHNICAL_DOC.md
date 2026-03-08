@@ -57,7 +57,7 @@ The architecture is a classic hub-and-spoke model. Each collector independently 
 | Framework            | React 19        | Component model, hooks, wide ecosystem       |
 | Build Tool           | Vite            | Fast HMR, excellent React support            |
 | State Management     | Zustand         | Lightweight, hook-based, minimal boilerplate |
-| Routing              | React Router v6 | Industry standard, file-based routing        |
+| Routing              | React Router v7 | Industry standard, file-based routing        |
 | HTTP Client          | Axios           | Interceptors, easy auth header injection     |
 | Charts               | Recharts        | React-native chart library, composable       |
 | UI Component Library | shadcn/ui       | Accessible, unstyled, customizable           |
@@ -104,9 +104,9 @@ The monorepo is organized into two top-level areas: `server/` for the Go backend
 
 **Server (`server/`)** — ✅ Exists. Contains the main Go application entry point under `cmd/`, with all business logic organized inside `internal/` using the following sub-packages: `controllers/` for HTTP handlers, `services/` for business logic, `models/` for GORM models, `routes/` for route registration, `middleware/` for auth, CORS, and rate-limiting, `database/` for PostgreSQL and Redis connection helpers, and `utils/` for shared helpers. Migrations live in the `cmd/migrate` directory. A `cmd/seed` and `cmd/purge` directory also exist.
 
-**UI Core (`ui/core/`)** — 🔴 Not yet created. Will be the React 19 web application — the single, shared dashboard UI. Planned as a standard Vite + React project with key directories: `components/`, `pages/`, `store/` (Zustand), `api/` (Axios wrappers), `types/`, and `hooks/`.
+**UI Core (`ui/core/`)** — ✅ Exists. The React 19 web application — the single, shared dashboard UI. A Vite + React Router v7 project with key directories: `components/`, `store/` (Zustand), `api/` (Axios wrappers), `types/`, and `hooks/`.
 
-**UI Wrappers (`ui/wrappers/`)** — 🔴 Not yet created. Will contain the platform-specific native shells that embed the `ui/core` React app inside a WebView and provide a background activity collector. Planned sub-directories: `android/` (Kotlin), `windows/` (Go tray app), `extension/` (browser extension).
+**UI Wrappers (`ui/wrappers/`)** — ✅ Partially exists. Contains the platform-specific native shells that embed the `ui/core` React app inside a WebView and provide a background activity collector. Sub-directories: `android/` (Kotlin, exists), `windows/` (Go tray app, exists), `extension/` (browser extension, not yet created).
 
 **Infrastructure (`docker/`)** — 🔴 Not yet created. Will contain Docker Compose files for local dev and production.
 
@@ -127,25 +127,29 @@ All routes are registered in `routes/routes.go`. Routes are split into two group
 
 Currently registered protected endpoints:
 
-| Method | Path              | Handler            |
-| ------ | ----------------- | ------------------ |
-| POST   | `/events`         | `IngestEvents`     |
-| GET    | `/events`         | `GetEvents`        |
-| PATCH  | `/events/:id`     | `EditEvent`        |
-| DELETE | `/events/:id`     | `DeleteEvent`      |
-| GET    | `/timeline`       | `GetTimeline`      |
-| GET    | `/summary/daily`  | `GetDailySummary`  |
-| GET    | `/summary/weekly` | `GetWeeklySummary` |
-| GET    | `/reports`        | `GetReports`       |
-| GET    | `/categories`     | `GetCategories`    |
-| POST   | `/categories`     | `CreateCategory`   |
-| PATCH  | `/categories/:id` | `UpdateCategory`   |
-| DELETE | `/categories/:id` | `DeleteCategory`   |
-| GET    | `/devices`        | `GetDevices`       |
-| POST   | `/devices`        | `RegisterDevice`   |
-| DELETE | `/devices/:id`    | `DeleteDevice`     |
-| GET    | `/settings`       | `GetSettings`      |
-| PUT    | `/settings`       | `UpdateSettings`   |
+| Method | Path                 | Handler            |
+| ------ | -------------------- | ------------------ |
+| POST   | `/events`            | `IngestEvents`     |
+| GET    | `/events`            | `GetEvents`        |
+| PATCH  | `/events/:id`        | `EditEvent`        |
+| DELETE | `/events/:id`        | `DeleteEvent`      |
+| GET    | `/timeline`          | `GetTimeline`      |
+| GET    | `/summary/daily`     | `GetDailySummary`  |
+| GET    | `/summary/weekly`    | `GetWeeklySummary` |
+| GET    | `/reports`           | `GetReports`       |
+| GET    | `/categories`        | `GetCategories`    |
+| POST   | `/categories`        | `CreateCategory`   |
+| PATCH  | `/categories/:id`    | `UpdateCategory`   |
+| DELETE | `/categories/:id`    | `DeleteCategory`   |
+| GET    | `/devices`           | `GetDevices`       |
+| POST   | `/devices`           | `RegisterDevice`   |
+| DELETE | `/devices/:id`       | `DeleteDevice`     |
+| GET    | `/settings`          | `GetSettings`      |
+| PUT    | `/settings`          | `UpdateSettings`   |
+| GET    | `/apps`              | `ListApps`         |
+| PATCH  | `/apps/:id/category` | `SetAppCategory`   |
+| PATCH  | `/apps/:id/classify` | `ClassifyApp`      |
+| PATCH  | `/apps/:id/system`   | `SetAppSystem`     |
 
 Public auth endpoints:
 
@@ -153,7 +157,7 @@ Public auth endpoints:
 | ------ | ---------------- | --------------- |
 | POST   | `/auth/register` | `Register`      |
 | POST   | `/auth/login`    | `Login`         |
-| GET    | `/auth/refresh`  | `Refresh`       |
+| POST   | `/auth/refresh`  | `Refresh`       |
 | DELETE | `/auth/account`  | `DeleteAccount` |
 
 ### 4.3 Models
@@ -164,21 +168,19 @@ All models live in `internal/models/models.go` and are managed by GORM AutoMigra
 
 `EventsService.IngestEvents` validates the `DeviceKey` against the calling user's devices, filters events matching the user's `ExcludedApps` / `ExcludedUrls` lists, and drops zero/negative-duration events.
 
-With Redis available the validated payload is pushed onto a Redis list (`timepad:ingest_queue`) and the controller responds **HTTP 202 Accepted**. A `StartIngestWorker` goroutine (started at server boot) pops jobs via `BRPOP` and calls `processEvents` which: batch-inserts via `CreateInBatches(100)`, runs `autoCategorize` (evaluates category `rules` JSONB and writes the first matching `category_id`), and updates `Device.LastSeenAt`.
+With Redis available the validated payload is pushed onto a Redis list (`timepad:ingest_queue`) and the controller responds **HTTP 202 Accepted**. A `StartIngestWorker` goroutine (started at server boot) pops jobs via `BRPOP` and calls `processEvents` which: upserts an `App` row for each unique non-idle app name (tracking platform, first/last seen), resolves `AppID` on each event, batch-inserts events via `CreateInBatches(100)`, and updates `Device.LastSeenAt`.
 
 If Redis is unavailable at startup, the same `processEvents` logic runs synchronously and the controller responds **HTTP 201 Created**.
 
 ### 4.5 Background Jobs
 
 - **Ingest worker** — `EventsService.StartIngestWorker(ctx)` runs as a goroutine at server startup. Pops jobs from `timepad:ingest_queue` in Redis and processes them via `processEvents`. ✅
-- **Auto-categorization** — runs inline inside `processEvents` after each batch insert, applying category `rules` JSONB to newly inserted events with no existing category. ✅
+- **App upsert** — runs inline inside `processEvents`: for each unique non-idle `app_name`, inserts or updates the `apps` table (extending the `platforms` array and bumping `last_seen_at`), then resolves `app_id` on all ingested events. Category assignment lives on the `App` record and is managed via `PATCH /apps/:id/category` or `PATCH /apps/:id/classify`. ✅
 - **Data retention purge** — `PurgeService.PurgeExpiredEvents` deletes events older than each user's `data_retention_days` setting. Invoked manually via `go run ./cmd/purge` or an external cron job. ✅
 
 ---
 
-## 5. Web App (React) — 🔴 Planned
-
-> **Note:** The React web app has not been built yet. This section describes the planned architecture.
+## 5. Web App (React) — ✅ Built
 
 ### 5.1 Project Setup
 
@@ -205,7 +207,7 @@ WebSocket support is deferred. In the interim, the web app uses two mechanisms t
 
 ### 5.5 Routing
 
-Routes are defined using React Router v6. All routes except `/login` and `/register` are wrapped in a `PrivateRoute` component that checks the auth store and redirects unauthenticated users to `/login`.
+Routes are defined using React Router v7. All routes except `/login` and `/register` are nested under the `_app.tsx` authenticated layout, which checks the auth store and redirects unauthenticated users to `/login`.
 
 | Path         | Page Component          |
 | ------------ | ----------------------- |
@@ -235,9 +237,7 @@ The `src/types/index.ts` file defines all shared interfaces: `TimelineEntry`, `D
 
 ---
 
-## 6. Client Collectors — 🔴 Planned
-
-> **Note:** None of the client collectors have been built yet. This section describes the planned architecture for each platform.
+## 6. Client Collectors
 
 ### 6.1 Android Collector (Kotlin)
 
@@ -284,7 +284,9 @@ All tables are managed by GORM AutoMigrate. The following tables exist:
 
 **`categories`** — Stores categorization labels, either system-wide (`is_system = true`, `user_id = NULL`) or user-specific. Fields: `id` (UUID PK), `user_id` (nullable FK → users, CASCADE), `name`, `color` (default `#6B7280`), `icon`, `is_system`, `is_productive` (nullable boolean — `true` = productive, `false` = distraction, `NULL` = uncategorized), `rules` (JSONB array of matching rules).
 
-**`activity_events`** — Primary data table. Fields: `id` (UUID PK), `user_id` (FK → users, CASCADE), `device_id` (FK → devices, CASCADE), `app_name`, `window_title`, `url`, `category_id` (nullable FK → categories), `start_time`, `end_time`, `duration_secs`, `is_idle` (default `false`), `is_private` (default `false`), `raw_meta` (JSONB), `created_at`.
+**`apps`** — Tracks unique applications per user across all devices. Category assignment lives here, not on individual events. Fields: `id` (UUID PK), `user_id` (FK → users, CASCADE), `name` (unique per user), `icon`, `platforms` (text[]), `is_system` (default `false`), `category_id` (nullable FK → categories), `first_seen_at`, `last_seen_at`.
+
+**`activity_events`** — Primary data table. Fields: `id` (UUID PK), `user_id` (FK → users, CASCADE), `device_id` (FK → devices, CASCADE), `app_id` (nullable FK → apps), `app_name`, `window_title`, `url`, `start_time`, `end_time`, `duration_secs`, `is_idle` (default `false`), `is_private` (default `false`), `raw_meta` (JSONB), `created_at`.
 
 **`user_settings`** — One-to-one with users. Fields: `user_id` (UUID PK, FK → users, CASCADE), `excluded_apps` (text[]), `excluded_urls` (text[]), `idle_threshold` (default 300s), `tracking_enabled` (default `true`), `data_retention_days` (default 365), `updated_at`.
 
@@ -294,12 +296,12 @@ All tables are managed by GORM AutoMigrate. The following tables exist:
 | ----------------------- | ---------------------------- | ---------------------------------------------- |
 | `idx_events_user_start` | `(user_id, start_time DESC)` | Primary query pattern for timeline and summary |
 | `idx_events_device`     | `(device_id)`                | Device-filtered queries                        |
-| `idx_events_category`   | `(category_id)`              | Category breakdown queries                     |
+| `idx_events_app`        | `(app_id)`                   | App association queries                        |
 | `idx_events_app_name`   | `(user_id, app_name)`        | App usage aggregation                          |
 
 ### 7.3 Category Rules Schema
 
-The `rules` JSONB column on categories stores an array of matching rule objects. Each rule has a `type` (`app_name`, `url_domain`, or `window_title`), an `op` (`contains`, `equals`, `starts_with`), and a `value` string. After every successful batch insert, `autoCategorize` loads all user + system categories that have non-empty rules, pre-parses them once, then walks each newly inserted event that lacks a category and applies OR logic across rules. The first matching category wins and is written back via an UPDATE.
+The `rules` JSONB column on categories stores an array of matching rule objects for reference (each with a `type` of `app_name`, `url_domain`, or `window_title`; an `op` of `contains`, `equals`, or `starts_with`; and a `value` string). Rules are surfaced through the Categories UI but are **not** automatically applied at ingestion time. Category assignment is managed explicitly per `App` via `PATCH /apps/:id/category` or the quick-classify shortcut `PATCH /apps/:id/classify`.
 
 ---
 
@@ -351,14 +353,14 @@ Events matching the user's `excluded_apps` / `excluded_urls` settings are silent
 
 Returns a paginated list of raw activity events for the authenticated user, ordered by `start_time` descending.
 
-#### `GET /timeline?date=YYYY-MM-DD&cursor=<opaque>&limit=100`
+#### `GET /timeline?date=YYYY-MM-DD&cursor=<opaque>&limit=100&app_name=<string>`
 
-Returns a paginated page of events for the specified date (interpreted in the user's timezone), enriched with full `category` and `device` structs, ordered by `start_time` ascending. Private events (`is_private = true`) are excluded. Response shape: `{ "events": [...], "next_cursor": "<base64>" }` — `next_cursor` is omitted when there are no more pages. Default `limit` is 100, maximum is 500.
+Returns a paginated page of events for the specified date (interpreted in the user's timezone), enriched with full `app` and `device` structs, ordered by `start_time` ascending. Private events (`is_private = true`) are excluded. Optional `app_name` query parameter filters results to a specific application. Response shape: `{ "events": [...], "next_cursor": "<base64>" }` — `next_cursor` is omitted when there are no more pages. Default `limit` is 100, maximum is 500.
 
 #### `PATCH /events/:id`
 
-**Request body (all optional):** `category_id` (string UUID or empty string to unset), `is_private` (boolean).  
-**Response 200:** Success confirmation.
+**Request body (all optional):** `is_private` (boolean).  
+**Response 200:** Success confirmation. To reassign a category, use `PATCH /apps/:id/category` instead — categorization is managed at the app level.
 
 #### `DELETE /events/:id`
 
@@ -404,7 +406,7 @@ Returns all categories visible to the user — their own user-specific categorie
 
 #### `DELETE /categories/:id`
 
-**Response 200:** Nullifies `category_id` on all events referencing this category, then deletes the category. Only user-owned categories can be deleted.
+**Response 200:** Deletes the category. Only user-owned categories can be deleted. Apps referencing this category should have their `category_id` cleared via `PATCH /apps/:id/category` before deletion to avoid dangling references.
 
 ---
 
@@ -434,6 +436,29 @@ Returns the user's current settings: `excluded_apps`, `excluded_urls`, `idle_thr
 #### `PUT /settings`
 
 **Request body (all optional):** Any subset of the settings fields. Only provided fields are updated.
+
+---
+
+### Apps Endpoints
+
+#### `GET /apps`
+
+Returns all tracked apps for the authenticated user (unique app names seen across all devices), ordered by `last_seen_at` descending. Each app includes its assigned category.
+
+#### `PATCH /apps/:id/category`
+
+**Request body:** `category_id` (string UUID or `null` to clear).  
+**Response 200:** Returns the updated app. Assigns a category to the app; the category is surfaced on events through the `App` join.
+
+#### `PATCH /apps/:id/classify`
+
+**Request body:** `is_productive` (boolean or `null`).  
+**Response 200:** Finds or creates a system-level "Productive" / "Distraction" category and assigns it to the app.
+
+#### `PATCH /apps/:id/system`
+
+**Request body:** `is_system` (boolean).  
+**Response 200:** Marks or unmarks the app as a system/background app.
 
 ---
 
@@ -478,7 +503,7 @@ A per-IP fixed-window rate limiter (`middleware.RateLimit`) is active globally o
 4. Server validates JWT and resolves `device_key` to a known device.
 5. Server filters excluded apps/URLs and invalid events (duration ≤ 0).
 6. _(Async path)_ Server enqueues payload to Redis and returns **HTTP 202** immediately.
-7. `IngestWorker` goroutine pops the job and calls `processEvents`: `CreateInBatches(100)` → `autoCategorize` → `LastSeenAt` update.
+7. `IngestWorker` goroutine pops the job and calls `processEvents`: upserts `App` rows for each unique app name → resolves `AppID` on events → `CreateInBatches(100)` → `LastSeenAt` update.
 8. _(Sync fallback, no Redis)_ `processEvents` runs inline and server returns **HTTP 201**.
 9. React app refetches timeline/summary on next refresh cycle (auto or manual).
 
@@ -487,7 +512,7 @@ A per-IP fixed-window rate limiter (`middleware.RateLimit`) is active globally o
 1. User opens the Timeline page.
 2. React app calls `GET /timeline?date=YYYY-MM-DD&limit=100` (passes `cursor` on subsequent pages).
 3. Server parses the date in the user's timezone, applies `is_private = false` filter, and adds `start_time > cursorTime` when a cursor is provided.
-4. GORM preloads `Category` and `Device` associations.
+4. GORM preloads `App.Category` and `Device` associations.
 5. Events are ordered by `start_time ASC`; `limit + 1` are fetched to detect next page.
 6. Response includes `next_cursor` (base64 timestamp) if another page exists.
 7. React renders events in a horizontal bar timeline, color-coded by category.
@@ -518,9 +543,9 @@ On first install, each client must be registered via `POST /api/v1/devices` (pro
 
 ---
 
-## 12. Deployment — 🔴 Planned
+## 12. Deployment
 
-> **Note:** No Docker or deployment infrastructure has been created yet. This section describes the planned setup.
+> **Note:** Docker Compose infrastructure has not been created. The Go server includes a `vercel.json` for serverless deployment on Vercel. The React app can be deployed as a static build behind any CDN or reverse proxy.
 
 ### Docker Compose (Development)
 
@@ -589,25 +614,27 @@ Ensure PostgreSQL is running and accessible. The server reads its connection str
 
 Copy `server/.env.example` to `server/.env` and fill in the database URL and JWT key paths. Run migrations with `make migrate` (or `go run ./cmd/migrate`). Start the server with `make run` (or `air` for hot-reload). Server runs at `http://localhost:8080`.
 
-### 3. Run the React web app — 🔴 Not yet available
+### 3. Run the React web app
 
-Once `ui/core/` is created, install dependencies with `npm install` and start the dev server with `npm run dev`.
+From `ui/core/`, install dependencies with `npm install` and start the dev server with `npm run dev` (React Router v7 + Vite dev server at `http://localhost:5173`).
 
 ### 4. Run the browser extension — 🔴 Not yet available
 
-Once `ui/wrappers/extension/` is created, install dependencies and run `npm run dev`.
+The `ui/wrappers/extension/` directory has not been created yet.
 
-### 5. Run Windows collector — 🔴 Not yet available
+### 5. Run Windows collector
 
-Once `ui/wrappers/windows/` is created, run the Go collector directly.
+From `ui/wrappers/windows/`, run `go run .` to start the Windows system tray collector.
 
 ### Useful Commands (currently available)
 
-| Command                         | Description                         |
-| ------------------------------- | ----------------------------------- |
-| `make run` (in `server/`)       | Start Go server with air hot-reload |
-| `make migrate` (in `server/`)   | Run GORM auto-migrations            |
-| `go build ./...` (in `server/`) | Compile check                       |
+| Command                                | Description                            |
+| -------------------------------------- | -------------------------------------- |
+| `make run` (in `server/`)              | Start Go server with air hot-reload    |
+| `make migrate` (in `server/`)          | Run GORM auto-migrations               |
+| `go build ./...` (in `server/`)        | Compile check                          |
+| `npm run dev` (in `ui/core/`)          | Start React app dev server (port 5173) |
+| `go run .` (in `ui/wrappers/windows/`) | Run Windows tray collector             |
 
 ---
 

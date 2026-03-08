@@ -70,12 +70,9 @@ ui/core/
 │       │   ├── sidebar.tsx
 │       │   ├── topbar.tsx
 │       │   └── mobile-nav.tsx
+│       ├── animate-ui/
 │       ├── dashboard/
 │       ├── timeline/
-│       ├── reports/
-│       ├── categories/
-│       ├── devices/
-│       ├── settings/
 │       └── ui/                     ← shadcn/ui primitives
 ```
 
@@ -83,41 +80,41 @@ ui/core/
 
 ### 3. Feature List & Owning Page
 
-| #   | Feature                                                 | Route                 | Status   |
-| --- | ------------------------------------------------------- | --------------------- | -------- |
-| 1   | Register / Login / Token refresh                        | `/login`, `/register` | 🔴 Build |
-| 2   | Delete account                                          | Settings page         | 🔴 Build |
-| 3   | Dashboard — daily summary card                          | `/dashboard`          | 🔴 Build |
-| 4   | Dashboard — productivity ring chart                     | `/dashboard`          | 🔴 Build |
-| 5   | Dashboard — top apps list                               | `/dashboard`          | 🔴 Build |
-| 6   | Dashboard — device breakdown                            | `/dashboard`          | 🔴 Build |
-| 7   | Dashboard — peak hour indicator                         | `/dashboard`          | 🔴 Build |
-| 8   | Dashboard — date picker (navigate days)                 | `/dashboard`          | 🔴 Build |
-| 9   | Dashboard — manual refresh button                       | `/dashboard`          | 🔴 Build |
-| 10  | Timeline — horizontal day view                          | `/timeline`           | 🔴 Build |
-| 11  | Timeline — cursor pagination                            | `/timeline`           | 🔴 Build |
-| 12  | Timeline — mark event private                           | `/timeline`           | 🔴 Build |
-| 13  | Timeline — reassign category on event                   | `/timeline`           | 🔴 Build |
-| 14  | Timeline — filter by device                             | `/timeline`           | 🔴 Build |
-| 15  | Reports — custom date range                             | `/reports`            | 🔴 Build |
-| 16  | Reports — bar chart daily trend                         | `/reports`            | 🔴 Build |
-| 17  | Reports — category doughnut chart                       | `/reports`            | 🔴 Build |
-| 18  | Reports — app usage table                               | `/reports`            | 🔴 Build |
-| 19  | Reports — device usage breakdown                        | `/reports`            | 🔴 Build |
-| 20  | Categories — list system + user categories              | `/categories`         | 🔴 Build |
-| 21  | Categories — create / edit / delete                     | `/categories`         | 🔴 Build |
-| 22  | Categories — set productive / distraction / neutral     | `/categories`         | 🔴 Build |
-| 23  | Categories — rule builder (app name, URL, window title) | `/categories`         | 🔴 Build |
-| 24  | Devices — list registered devices                       | `/devices`            | 🔴 Build |
-| 25  | Devices — register new device + show device_key         | `/devices`            | 🔴 Build |
-| 26  | Devices — delete device (with confirmation)             | `/devices`            | 🔴 Build |
-| 27  | Settings — excluded apps / URLs list                    | `/settings`           | 🔴 Build |
-| 28  | Settings — idle threshold slider                        | `/settings`           | 🔴 Build |
-| 29  | Settings — tracking toggle                              | `/settings`           | 🔴 Build |
-| 30  | Settings — data retention selector                      | `/settings`           | 🔴 Build |
-| 31  | Settings — timezone picker                              | `/settings`           | 🔴 Build |
-| 32  | Native bridge detection (Android/Windows)               | Global hook           | 🔴 Build |
-| 33  | Auto-refresh every 30 min                               | Layout                | 🔴 Build |
+| #   | Feature                                                 | Route                 | Status  |
+| --- | ------------------------------------------------------- | --------------------- | ------- |
+| 1   | Register / Login / Token refresh                        | `/login`, `/register` | ✅ Done |
+| 2   | Delete account                                          | Settings page         | ✅ Done |
+| 3   | Dashboard — daily summary card                          | `/dashboard`          | ✅ Done |
+| 4   | Dashboard — productivity ring chart                     | `/dashboard`          | ✅ Done |
+| 5   | Dashboard — top apps list                               | `/dashboard`          | ✅ Done |
+| 6   | Dashboard — device breakdown                            | `/dashboard`          | ✅ Done |
+| 7   | Dashboard — peak hour indicator                         | `/dashboard`          | ✅ Done |
+| 8   | Dashboard — date picker (navigate days)                 | `/dashboard`          | ✅ Done |
+| 9   | Dashboard — manual refresh button                       | `/dashboard`          | ✅ Done |
+| 10  | Timeline — horizontal day view                          | `/timeline`           | ✅ Done |
+| 11  | Timeline — cursor pagination                            | `/timeline`           | ✅ Done |
+| 12  | Timeline — mark event private                           | `/timeline`           | ✅ Done |
+| 13  | Timeline — reassign category on event                   | `/timeline`           | ✅ Done |
+| 14  | Timeline — filter by device                             | `/timeline`           | ✅ Done |
+| 15  | Reports — custom date range                             | `/reports`            | ✅ Done |
+| 16  | Reports — bar chart daily trend                         | `/reports`            | ✅ Done |
+| 17  | Reports — category doughnut chart                       | `/reports`            | ✅ Done |
+| 18  | Reports — app usage table                               | `/reports`            | ✅ Done |
+| 19  | Reports — device usage breakdown                        | `/reports`            | ✅ Done |
+| 20  | Categories — list system + user categories              | `/categories`         | ✅ Done |
+| 21  | Categories — create / edit / delete                     | `/categories`         | ✅ Done |
+| 22  | Categories — set productive / distraction / neutral     | `/categories`         | ✅ Done |
+| 23  | Categories — rule builder (app name, URL, window title) | `/categories`         | ✅ Done |
+| 24  | Devices — list registered devices                       | `/devices`            | ✅ Done |
+| 25  | Devices — register new device + show device_key         | `/devices`            | ✅ Done |
+| 26  | Devices — delete device (with confirmation)             | `/devices`            | ✅ Done |
+| 27  | Settings — excluded apps / URLs list                    | `/settings`           | ✅ Done |
+| 28  | Settings — idle threshold slider                        | `/settings`           | ✅ Done |
+| 29  | Settings — tracking toggle                              | `/settings`           | ✅ Done |
+| 30  | Settings — data retention selector                      | `/settings`           | ✅ Done |
+| 31  | Settings — timezone picker                              | `/settings`           | ✅ Done |
+| 32  | Native bridge detection (Android/Windows)               | Global hook           | ✅ Done |
+| 33  | Auto-refresh every 30 min                               | Layout                | ✅ Done |
 
 ---
 

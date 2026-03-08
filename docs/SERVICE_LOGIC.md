@@ -30,13 +30,14 @@ The flow of telemetry data operates in a unidirectional pipeline from client dev
 
 ### 2.1 Timeline Generation (`GetTimeline`)
 
-**Endpoint**: `GET /api/v1/timeline?date=YYYY-MM-DD&cursor=<opaque>&limit=100`  
-**Purpose**: Build a chronologically sorted, paginated array of a user's day, enriched with category and device context.
+**Endpoint**: `GET /api/v1/timeline?date=YYYY-MM-DD&cursor=<opaque>&limit=100&app_name=<string>`  
+**Purpose**: Build a chronologically sorted, paginated array of a user's day, enriched with app, category, and device context.
 
 - **Date Normalization**: Input `YYYY-MM-DD` is parsed using the user's `Timezone` preference (`time.LoadLocation`) so day boundaries are correct for any timezone.
 - **Privacy Filter**: Events with `is_private = true` are excluded from all results.
+- **App Name Filter**: Optional `app_name` query parameter narrows results to a specific application.
 - **Cursor Pagination**: Returns up to `limit` events (default 100, max 500). The cursor is a `base64(RFC3339Nano timestamp)` of the last returned event's `start_time`. Pass `cursor` in the next request to get the following page. Response includes `next_cursor` when more pages exist, omitted on the last page.
-- **Relational Joining**: The GORM query uses `.Preload("Device").Preload("Category")` to hydrate foreign keys into full nested structs.
+- **Relational Joining**: The GORM query uses `.Preload("Device").Preload("App.Category")` to hydrate foreign keys into full nested structs.
 - **Sorting**: Enforces `.Order("start_time asc")` so the UI can map events sequentially left-to-right.
 
 **Status**: ✅ Implemented
@@ -56,7 +57,7 @@ The flow of telemetry data operates in a unidirectional pipeline from client dev
     - `deviceUsageMap[deviceId] += duration`
     - `hourUsageMap[hour] += duration` (hour computed in user's local timezone)
 - **Idle vs Active**: `IsIdle = true` → `TotalIdleSecs`; otherwise → `TotalActiveSecs`.
-- **Productive vs Distraction**: If an event's `CategoryID` is set and `Category.IsProductive != nil`:
+- **Productive vs Distraction**: If an event has an associated `App` with a `Category` and `Category.IsProductive != nil`:
     - `*IsProductive == true` → `ProductiveSecs += duration`
     - `*IsProductive == false` → `DistractionSecs += duration`
     - `IsProductive == nil` → uncategorized, not counted in either.
@@ -128,19 +129,19 @@ The flow of telemetry data operates in a unidirectional pipeline from client dev
 
 ## 4. Remaining Gaps
 
-| Area                                            | Status             | Notes                                                                                                                                                       |
-| ----------------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **WebSocket real-time push**                    | 🔴 Not implemented | Interim: 30-min poll + manual refresh. Deferred to future sprint.                                                                                           |
-| **Device registration** (`POST /devices`)       | ✅ Implemented     | `POST /devices` accepts `name` + `platform`, generates a unique `device_key`, and returns the new device record.                                            |
-| **Device deletion** (`DELETE /devices/:id`)     | ✅ Implemented     | Users can remove their own devices; cascades to all associated events.                                                                                      |
-| **Category creation/deletion**                  | ✅ Implemented     | `POST /categories` creates user-owned categories; `DELETE /categories/:id` nullifies event references then removes the row.                                 |
-| **`ExcludedApps` / `ExcludedUrls` enforcement** | ✅ Implemented     | `IngestEvents` loads user settings and drops matching events before insert (case-insensitive O(1) map lookup).                                              |
-| **Data retention purge job**                    | ✅ Implemented     | `PurgeService.PurgeExpiredEvents` deletes events older than `DataRetentionDays` per user. Runnable via `go run ./cmd/purge` or a cron/scheduler.            |
-| **`LastSeenAt` update on device**               | ✅ Implemented     | `processEvents` calls `UPDATE devices SET last_seen_at = now() WHERE id = ?` after each successful batch insert (both sync and async paths).                |
-| **Auto-categorization**                         | ✅ Implemented     | After each batch insert, `autoCategorize` evaluates user + system category rules (OR logic) and tags uncategorized events with the first matching category. |
-| **Timezone-aware summaries**                    | ✅ Implemented     | `GetDailySummary`, `GetWeeklySummary`, `GetReports`, and `GetTimeline` all parse dates using `time.LoadLocation(user.Timezone)`.                            |
-| **`is_private` enforcement**                    | ✅ Implemented     | All read queries (timeline, summary, reports) include `AND is_private = false` so private events are invisible to the UI.                                   |
-| **`DELETE /auth/account`**                      | ✅ Implemented     | Permanently deletes the user row; ON DELETE CASCADE removes all devices, events, settings, and categories.                                                  |
-| **Rate limiting**                               | ✅ Implemented     | `middleware.RateLimit(cfg.RateLimitRPM)` (per-IP fixed-window) is applied globally. Controlled via `RATE_LIMIT_RPM` env var.                                |
-| **Async event ingestion**                       | ✅ Implemented     | Payloads are enqueued to Redis (HTTP 202); `StartIngestWorker` goroutine processes them. Falls back to sync insert if Redis is unavailable.                 |
-| **Cursor-based timeline pagination**            | ✅ Implemented     | `GET /timeline` accepts `cursor` + `limit` params. Returns `next_cursor` (base64 timestamp) when more pages exist.                                          |
+| Area                                            | Status             | Notes                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **WebSocket real-time push**                    | 🔴 Not implemented | Interim: 30-min poll + manual refresh. Deferred to future sprint.                                                                                                                                                                                                                            |
+| **Device registration** (`POST /devices`)       | ✅ Implemented     | `POST /devices` accepts `name` + `platform`, generates a unique `device_key`, and returns the new device record.                                                                                                                                                                             |
+| **Device deletion** (`DELETE /devices/:id`)     | ✅ Implemented     | Users can remove their own devices; cascades to all associated events.                                                                                                                                                                                                                       |
+| **Category creation/deletion**                  | ✅ Implemented     | `POST /categories` creates user-owned categories; `DELETE /categories/:id` nullifies event references then removes the row.                                                                                                                                                                  |
+| **`ExcludedApps` / `ExcludedUrls` enforcement** | ✅ Implemented     | `IngestEvents` loads user settings and drops matching events before insert (case-insensitive O(1) map lookup).                                                                                                                                                                               |
+| **Data retention purge job**                    | ✅ Implemented     | `PurgeService.PurgeExpiredEvents` deletes events older than `DataRetentionDays` per user. Runnable via `go run ./cmd/purge` or a cron/scheduler.                                                                                                                                             |
+| **`LastSeenAt` update on device**               | ✅ Implemented     | `processEvents` calls `UPDATE devices SET last_seen_at = now() WHERE id = ?` after each successful batch insert (both sync and async paths).                                                                                                                                                 |
+| **Auto-categorization**                         | 🔴 Removed         | The `autoCategorize` rule-matching approach was replaced. Categories are now assigned directly to `App` records via `PATCH /apps/:id/category` or `PATCH /apps/:id/classify`. The `rules` JSONB field remains on the Category model for reference but is no longer evaluated at ingest time. |
+| **Timezone-aware summaries**                    | ✅ Implemented     | `GetDailySummary`, `GetWeeklySummary`, `GetReports`, and `GetTimeline` all parse dates using `time.LoadLocation(user.Timezone)`.                                                                                                                                                             |
+| **`is_private` enforcement**                    | ✅ Implemented     | All read queries (timeline, summary, reports) include `AND is_private = false` so private events are invisible to the UI.                                                                                                                                                                    |
+| **`DELETE /auth/account`**                      | ✅ Implemented     | Permanently deletes the user row; ON DELETE CASCADE removes all devices, events, settings, and categories.                                                                                                                                                                                   |
+| **Rate limiting**                               | ✅ Implemented     | `middleware.RateLimit(cfg.RateLimitRPM)` (per-IP fixed-window) is applied globally. Controlled via `RATE_LIMIT_RPM` env var.                                                                                                                                                                 |
+| **Async event ingestion**                       | ✅ Implemented     | Payloads are enqueued to Redis (HTTP 202); `StartIngestWorker` goroutine processes them. Falls back to sync insert if Redis is unavailable.                                                                                                                                                  |
+| **Cursor-based timeline pagination**            | ✅ Implemented     | `GET /timeline` accepts `cursor` + `limit` params. Returns `next_cursor` (base64 timestamp) when more pages exist.                                                                                                                                                                           |
